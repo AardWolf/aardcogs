@@ -72,6 +72,7 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         embed = await profileLookup(self,profile)
+        print ("embed is a " + str(type(embed)))
         await self.bot.say(resultStr, embed=embed)
 
     @commands.command(pass_context=True, no_pm=False)
@@ -193,6 +194,7 @@ async def profileLookup(self,profile):
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/user/info/" + query + "?" + api_key
+    print(url)
 
     #TODO: Honor is_private flag on private profiles.
 
@@ -207,7 +209,7 @@ async def profileLookup(self,profile):
 
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
-            embed = discord.Embed(title=j['response']['user']['user_name'], description=j['response']['user']['bio'][:2048], url=j['response']['user']['untappd_url'])
+            embed = discord.Embed(title=j['response']['user']['user_name'], description=j['response']['user']['bio'][:2048] or "None", url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
             embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
             embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
@@ -221,7 +223,7 @@ async def profileLookup(self,profile):
                         recentStr += " (" + str(checkin['beer']['auth_rating']) + ")"
 
                     recentStr += " brewed by *" + checkin['brewery']['brewery_name'] + "*\n"
-                embed.add_field(name="Recent Activity", value=recentStr[:1024], inline=False)
+                embed.add_field(name="Recent Activity", value=recentStr[:1024] or "No Activity", inline=False)
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
         else:
             embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
