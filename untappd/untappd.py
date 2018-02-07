@@ -72,7 +72,6 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         embed = await profileLookup(self,profile)
-        print ("embed is a " + str(type(embed)))
         await self.bot.say(resultStr, embed=embed)
 
     @commands.command(pass_context=True, no_pm=False)
@@ -194,7 +193,6 @@ async def profileLookup(self,profile):
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/user/info/" + query + "?" + api_key
-    print(url)
 
     #TODO: Honor is_private flag on private profiles.
 
