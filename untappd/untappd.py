@@ -18,6 +18,7 @@ class Untappd():
     def __init__(self, bot):
         self.bot = bot
         self.settings = dataIO.load_json("data/untappd/settings.json")
+        self.session = aiohttp.ClientSession()
 
     @commands.command(pass_context=True, no_pm=True)
     async def findbeer(self, ctx, *keywords):
@@ -116,28 +117,27 @@ async def lookupBeer(settings,beerid):
 
     api_key = "client_id=" + settings["client_id"] + "&client_secret=" + settings["client_secret"]
     url = "https://api.untappd.com/v4/beer/info/" + str(beerid) + "?" + api_key
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            else:
-                return embedme("Query failed with code " + str(resp.status))
+    async with self.session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        else:
+            return embedme("Query failed with code " + str(resp.status))
 
-            if j['meta']['code'] == 200:
-                beer = j['response']['beer']
-                beer_url = "https://untappd.com/b/" + beer['beer_slug'] + "/" + str(beer['bid'])
-                brewery_url = "https://untappd.com/w/" + beer['brewery']['brewery_slug'] + "/" + str(beer['brewery']['brewery_id'])
-                beer_title = beer['beer_name']
-                embed = discord.Embed(title=beer_title, description=beer['beer_description'][:2048], url=beer_url)
-                embed.set_author(name=beer['brewery']['brewery_name'], url=brewery_url, icon_url=beer['brewery']['brewery_label'])
-                embed.add_field(name="Style", value=beer['beer_style'], inline=True)
-                rating_str = str(round(beer['rating_score'],2)) + " Caps"
-                rating_str += " (" + human_number(beer['rating_count']) + ")"
-                embed.add_field(name="Rating", value=rating_str, inline=True)
-                embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
-                embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
-                embed.set_thumbnail(url=beer['beer_label'])
-                return embed
+        if j['meta']['code'] == 200:
+            beer = j['response']['beer']
+            beer_url = "https://untappd.com/b/" + beer['beer_slug'] + "/" + str(beer['bid'])
+            brewery_url = "https://untappd.com/w/" + beer['brewery']['brewery_slug'] + "/" + str(beer['brewery']['brewery_id'])
+            beer_title = beer['beer_name']
+            embed = discord.Embed(title=beer_title, description=beer['beer_description'][:2048], url=beer_url)
+            embed.set_author(name=beer['brewery']['brewery_name'], url=brewery_url, icon_url=beer['brewery']['brewery_label'])
+            embed.add_field(name="Style", value=beer['beer_style'], inline=True)
+            rating_str = str(round(beer['rating_score'],2)) + " Caps"
+            rating_str += " (" + human_number(beer['rating_count']) + ")"
+            embed.add_field(name="Rating", value=rating_str, inline=True)
+            embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
+            embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
+            embed.set_thumbnail(url=beer['beer_label'])
+            return embed
 
     return embedme("A problem")
 
@@ -148,41 +148,40 @@ async def searchBeer(settings,query):
     api_key = "client_id=" + settings["client_id"] + "&client_secret=" + settings["client_secret"]
 
     url = "https://api.untappd.com/v4/search/beer?" + qstr + "&" + api_key
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
+    async with self.session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        else:
+            return embedme("Beer search failed with code " + str(resp.status))
+
+        beers = []
+        firstnum=1
+
+        # Confirm success
+        if j['meta']['code'] == 200:
+            returnStr = "Your search for " + j['response']['parsed_term'] + " found "
+            if j['response']['beers']['count'] == 1:
+                return await lookupBeer(settings,j['response']['beers']['items'][0]['beer']['bid'])
+            elif j['response']['beers']['count'] > 1:
+                returnStr += str(j['response']['beers']['count']) + " beers:\n"
+                i = 0
+                beers = j['response']['beers']['items']
+                for beer in beers:
+                    if (i >= j['response']['beers']['count']) or (i >= 5):
+                        break
+
+                    resultStr += str(beer['beer']['bid']) + ". [" + beer['beer']['beer_name'] + "]"
+                    resultStr += "(" + "https://untappd.com/b/" + beer['beer']['beer_slug'] + "/" + str(beer['beer']['bid']) + ") "
+                    resultStr += " (" + str(human_number(int(beer['checkin_count']))) + " check ins) "
+                    resultStr += "brewed by *" + beer['brewery']['brewery_name'] + "*\n"
+                    if firstnum == 1:
+                        firstnum = beer['beer']['bid']
+                    i += 1
+
+                resultStr += "Look up a beer with `findbeer " + str(firstnum) + "`"
             else:
-                return embedme("Beer search failed with code " + str(resp.status))
-
-            beers = []
-            firstnum=1
-
-            # Confirm success
-            if j['meta']['code'] == 200:
-                returnStr = "Your search for " + j['response']['parsed_term'] + " found "
-                if j['response']['beers']['count'] == 1:
-                    return await lookupBeer(settings,j['response']['beers']['items'][0]['beer']['bid'])
-                elif j['response']['beers']['count'] > 1:
-                    returnStr += str(j['response']['beers']['count']) + " beers:\n"
-                    i = 0
-                    beers = j['response']['beers']['items']
-                    for beer in beers:
-                        if (i >= j['response']['beers']['count']) or (i >= 5):
-                            break
-
-                        resultStr += str(beer['beer']['bid']) + ". [" + beer['beer']['beer_name'] + "]"
-                        resultStr += "(" + "https://untappd.com/b/" + beer['beer']['beer_slug'] + "/" + str(beer['beer']['bid']) + ") "
-                        resultStr += " (" + str(human_number(int(beer['checkin_count']))) + " check ins) "
-                        resultStr += "brewed by *" + beer['brewery']['brewery_name'] + "*\n"
-                        if firstnum == 1:
-                            firstnum = beer['beer']['bid']
-                        i += 1
-
-                    resultStr += "Look up a beer with `findbeer " + str(firstnum) + "`"
-                else:
-                    returnStr += "no beers"
-                    print(json.dumps(j, indent=4))
+                returnStr += "no beers"
+                print(json.dumps(j, indent=4))
 
     embed = discord.Embed(title=returnStr, description=resultStr[:2048])
     return embed
@@ -197,38 +196,37 @@ async def profileLookup(settings,profile):
 
     #TODO: Honor is_private flag on private profiles.
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            elif resp.status == 500:
-                return embedme("The profile '" + profile + "' does not exist or the lookup failed in another way")
-            else:
-                print ("Failed for url: " + url)
-                return embedme("Profile query failed with code " + str(resp.status))
+    async with session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        elif resp.status == 500:
+            return embedme("The profile '" + profile + "' does not exist or the lookup failed in another way")
+        else:
+            print ("Failed for url: " + url)
+            return embedme("Profile query failed with code " + str(resp.status))
 
 #        print (json.dumps(j['response'],indent=4))
-            if j['meta']['code'] == 200:
-                embed = discord.Embed(title=j['response']['user']['user_name'], description=j['response']['user']['bio'][:2048], url=j['response']['user']['untappd_url'])
-                embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
-                embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
-                embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
-                if j['response']['user']['location']:
-                    embed.add_field(name="Location", value=j['response']['user']['location'], inline=True )
-                recentStr = ""
-                if 'recent_brews' in j['response']['user']:
-                    for checkin in j['response']['user']['recent_brews']['items']:
-                        recentStr += str(checkin['beer']['bid']) + ". " + checkin['beer']['beer_name']
-                        if checkin['beer']['auth_rating']:
-                            recentStr += " (" + str(checkin['beer']['auth_rating']) + ")"
+        if j['meta']['code'] == 200:
+            embed = discord.Embed(title=j['response']['user']['user_name'], description=j['response']['user']['bio'][:2048], url=j['response']['user']['untappd_url'])
+            embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
+            embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
+            embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
+            if j['response']['user']['location']:
+                embed.add_field(name="Location", value=j['response']['user']['location'], inline=True )
+            recentStr = ""
+            if 'recent_brews' in j['response']['user']:
+                for checkin in j['response']['user']['recent_brews']['items']:
+                    recentStr += str(checkin['beer']['bid']) + ". " + checkin['beer']['beer_name']
+                    if checkin['beer']['auth_rating']:
+                        recentStr += " (" + str(checkin['beer']['auth_rating']) + ")"
 
-                        recentStr += " brewed by *" + checkin['brewery']['brewery_name'] + "*\n"
-                    embed.add_field(name="Recent Activity", value=recentStr[:1024], inline=False)
-                embed.set_thumbnail(url=j['response']['user']['user_avatar'])
-            else:
-                embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
+                    recentStr += " brewed by *" + checkin['brewery']['brewery_name'] + "*\n"
+                embed.add_field(name="Recent Activity", value=recentStr[:1024], inline=False)
+            embed.set_thumbnail(url=j['response']['user']['user_avatar'])
+        else:
+            embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
 
-            return embed
+    return embed
 
 def embedme(errorStr):
     """Returns an embed object with the error string provided"""
