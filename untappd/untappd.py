@@ -41,10 +41,10 @@ class Untappd():
         await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
             lookup = True
-            embed = await lookupBeer(self.settings,keywords)
+            embed = await lookupBeer(self,keywords)
             #await self.bot.say( embed=embed)
         else:
-            embed = await searchBeer(self.settings,keywords)
+            embed = await searchBeer(self,keywords)
             #await self.bot.say(resultStr, embed=embed)
 
         if embed:
@@ -71,7 +71,7 @@ class Untappd():
                 profile = ctx.message.mentions[0].name
 
         await self.bot.send_typing(ctx.message.channel)
-        embed = await profileLookup(self.settings,profile)
+        embed = await profileLookup(self,profile)
         await self.bot.say(resultStr, embed=embed)
 
     @commands.command(pass_context=True, no_pm=False)
@@ -112,10 +112,10 @@ def setup(bot):
     check_files()
     bot.add_cog(Untappd(bot))
 
-async def lookupBeer(settings,beerid):
+async def lookupBeer(self,beerid):
     returnStr = ""
 
-    api_key = "client_id=" + settings["client_id"] + "&client_secret=" + settings["client_secret"]
+    api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
     url = "https://api.untappd.com/v4/beer/info/" + str(beerid) + "?" + api_key
     async with self.session.get(url) as resp:
         if resp.status == 200:
@@ -141,11 +141,11 @@ async def lookupBeer(settings,beerid):
 
     return embedme("A problem")
 
-async def searchBeer(settings,query):
+async def searchBeer(self,query):
     returnStr = ""
     resultStr = ""
     qstr = urllib.parse.urlencode({'q': query})
-    api_key = "client_id=" + settings["client_id"] + "&client_secret=" + settings["client_secret"]
+    api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/search/beer?" + qstr + "&" + api_key
     async with self.session.get(url) as resp:
@@ -161,7 +161,7 @@ async def searchBeer(settings,query):
         if j['meta']['code'] == 200:
             returnStr = "Your search for " + j['response']['parsed_term'] + " found "
             if j['response']['beers']['count'] == 1:
-                return await lookupBeer(settings,j['response']['beers']['items'][0]['beer']['bid'])
+                return await lookupBeer(self,j['response']['beers']['items'][0]['beer']['bid'])
             elif j['response']['beers']['count'] > 1:
                 returnStr += str(j['response']['beers']['count']) + " beers:\n"
                 i = 0
@@ -186,17 +186,17 @@ async def searchBeer(settings,query):
     embed = discord.Embed(title=returnStr, description=resultStr[:2048])
     return embed
 
-async def profileLookup(settings,profile):
+async def profileLookup(self,profile):
     returnStr = ""
     query = urllib.parse.quote_plus(profile)
     embed = False
-    api_key = "client_id=" + settings["client_id"] + "&client_secret=" + settings["client_secret"]
+    api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/user/info/" + query + "?" + api_key
 
     #TODO: Honor is_private flag on private profiles.
 
-    async with session.get(url) as resp:
+    async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
         elif resp.status == 500:
