@@ -8,9 +8,9 @@ import os
 import urllib.parse
 import certifi
 import json
-import re
 
-at_re = re.compile('^@?')
+#Beer: https://untappd.com/beer/<bid>
+#Brewery: https://untappd.com/brewery/<bid>
 
 class Untappd():
     """Untappd cog that lets the bot look up beer information from untappd.com!"""
