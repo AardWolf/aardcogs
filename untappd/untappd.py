@@ -117,6 +117,7 @@ async def lookupBeer(self,beerid):
 
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
     url = "https://api.untappd.com/v4/beer/info/" + str(beerid) + "?" + api_key
+    print(url)
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
@@ -137,6 +138,17 @@ async def lookupBeer(self,beerid):
             embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
             embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
             embed.set_thumbnail(url=beer['beer_label'])
+
+            if "collaborations_with" in j['response']['beer']:
+                collabStr = ""
+                i = 0
+                for collab in j['response']['beer']['collaborations_with']['items']:
+                    collabStr += "[" + collab['brewery']['brewery_name'] + "](https://untappd.com/brewery/"
+                    collabStr += str(collab['brewery']['brewery_id']) + ")\n"
+                    i += 1
+                    if i > 4:
+                        break
+                embed.add_field(name="Collaboration with", value=collabStr)
             return embed
 
     return embedme("A problem")
@@ -148,6 +160,7 @@ async def searchBeer(self,query):
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/search/beer?" + qstr + "&" + api_key
+    print(url)
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
