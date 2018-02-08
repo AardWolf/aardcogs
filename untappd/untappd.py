@@ -190,6 +190,7 @@ async def profileLookup(self,profile):
     returnStr = ""
     query = urllib.parse.quote_plus(profile)
     embed = False
+    beerList = []
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/user/info/" + query + "?" + api_key
@@ -223,7 +224,8 @@ async def profileLookup(self,profile):
                     if checkin['beer']['auth_rating']:
                         recentStr += " (" + str(checkin['beer']['auth_rating']) + ")"
 
-                    recentStr += " brewed by *" + checkin['brewery']['brewery_name'] + "*\n"
+                    recentStr += " brewed by *[" + checkin['brewery']['brewery_name']
+                    recentStr += "](https://untappd.com/brewery/" + str(checkin['brewery']['brewery_id']) + ")*\n"
                 embed.add_field(name="Recent Activity", value=recentStr[:1024] or "No Activity", inline=False)
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
         else:
