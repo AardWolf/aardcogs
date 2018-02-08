@@ -207,7 +207,9 @@ async def profileLookup(self,profile):
 
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
-            embed = discord.Embed(title=j['response']['user']['user_name'], description=j['response']['user']['bio'][:2048] or "None", url=j['response']['user']['untappd_url'])
+            embed = discord.Embed(title=j['response']['user']['user_name'],
+                                  description=j['response']['user']['bio'][:2048] or "None",
+                                  url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
             embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
             embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
@@ -216,7 +218,8 @@ async def profileLookup(self,profile):
             recentStr = ""
             if 'recent_brews' in j['response']['user']:
                 for checkin in j['response']['user']['recent_brews']['items']:
-                    recentStr += str(checkin['beer']['bid']) + ". " + checkin['beer']['beer_name']
+                    recentStr += str(checkin['beer']['bid']) + ". [" + checkin['beer']['beer_name']
+                    recentStr += "](https://untappd.com/beer/" + str(checkin['beer']['bid']) + ")"
                     if checkin['beer']['auth_rating']:
                         recentStr += " (" + str(checkin['beer']['auth_rating']) + ")"
 
