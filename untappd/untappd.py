@@ -117,7 +117,6 @@ async def lookupBeer(self,beerid):
 
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
     url = "https://api.untappd.com/v4/beer/info/" + str(beerid) + "?" + api_key
-    print(url)
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
@@ -160,7 +159,7 @@ async def searchBeer(self,query):
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/search/beer?" + qstr + "&" + api_key
-    print(url)
+#    print(url)
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
