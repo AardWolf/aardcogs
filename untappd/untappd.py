@@ -19,6 +19,18 @@ class Untappd():
         self.bot = bot
         self.settings = dataIO.load_json("data/untappd/settings.json")
         self.session = aiohttp.ClientSession()
+        self.emoji = {
+            1: "1⃣",
+            2: "2⃣",
+            3: "3⃣",
+            4: "4⃣",
+            5: "5⃣",
+            6: "6⃣",
+            7: "7⃣",
+            8: "8⃣",
+            9: "9⃣",
+            10: "🔟",
+            }
 
     @commands.command(pass_context=True, no_pm=True)
     async def findbeer(self, ctx, *keywords):
@@ -26,6 +38,7 @@ class Untappd():
         """A search uses characters, a lookup uses numbers"""
         lookup = False
         embed = False
+        beer_list = []
         resultStr = ""
 
         if not check_credentials(self.settings):
@@ -44,19 +57,30 @@ class Untappd():
             embed = await lookupBeer(self,keywords)
             #await self.bot.say( embed=embed)
         else:
-            embed = await searchBeer(self,keywords)
+            results = await searchBeer(self,keywords)
+            if type(results) == type(dict()):
+                embed = results["embed"]
+                if "beer_list" in results:
+                    beer_list = results["beer_list"]
+            else:
+                embed = results
             #await self.bot.say(resultStr, embed=embed)
 
         if embed:
-            await self.bot.say(resultStr, embed=embed)
+            message = await self.bot.say(resultStr, embed=embed)
         else:
-            await self.bot.say(resultStr)
+            message = await self.bot.say(resultStr)
+
+        if (len(beer_list) > 1):
+            await embed_menu(self, ctx, beer_list, message, 30)
+
 
     @commands.command(pass_context=True, no_pm=True)
     async def profile(self, ctx, profile: str):
         "Search for a user's information by providing their profile name, discord mentions OK"
 
         embed = False
+        beer_list = []
         resultStr = ""
 
         if not check_credentials(self.settings):
@@ -71,8 +95,13 @@ class Untappd():
                 profile = ctx.message.mentions[0].name
 
         await self.bot.send_typing(ctx.message.channel)
-        embed = await profileLookup(self,profile)
-        await self.bot.say(resultStr, embed=embed)
+        results = await profileLookup(self,profile)
+        embed = results["embed"]
+        if "beer_list" in results:
+            beer_list = results["beer_list"]
+        message = await self.bot.say(resultStr, embed=embed)
+        if len(beer_list) > 1:
+            await embed_menu(self, ctx, beer_list, message, 30)
 
     @commands.command(pass_context=True, no_pm=False)
     @checks.is_owner()
@@ -167,6 +196,7 @@ async def searchBeer(self,query):
             return embedme("Beer search failed with code " + str(resp.status))
 
         beers = []
+        beer_list = []
         firstnum=1
 
         # Confirm success
@@ -186,6 +216,7 @@ async def searchBeer(self,query):
                     resultStr += "(" + "https://untappd.com/b/" + beer['beer']['beer_slug'] + "/" + str(beer['beer']['bid']) + ") "
                     resultStr += " (" + str(human_number(int(beer['checkin_count']))) + " check ins) "
                     resultStr += "brewed by *" + beer['brewery']['brewery_name'] + "*\n"
+                    beer_list.append(beer['beer']['bid'])
                     if firstnum == 1:
                         firstnum = beer['beer']['bid']
                     i += 1
@@ -196,7 +227,11 @@ async def searchBeer(self,query):
                 print(json.dumps(j, indent=4))
 
     embed = discord.Embed(title=returnStr, description=resultStr[:2048])
-    return embed
+    result = dict()
+    result["embed"] = embed
+    if beer_list:
+        result["beer_list"] = beer_list
+    return (result)
 
 async def profileLookup(self,profile):
     returnStr = ""
@@ -238,12 +273,64 @@ async def profileLookup(self,profile):
 
                     recentStr += " brewed by *[" + checkin['brewery']['brewery_name']
                     recentStr += "](https://untappd.com/brewery/" + str(checkin['brewery']['brewery_id']) + ")*\n"
+                    beerList.append(checkin['beer']['bid'])
                 embed.add_field(name="Recent Activity", value=recentStr[:1024] or "No Activity", inline=False)
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
         else:
             embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
 
-    return embed
+    result = dict()
+    result["embed"] = embed
+    if beerList:
+        result["beer_list"] = beerList
+    return result
+
+async def embed_menu(self, ctx, beer_list: list,
+                     message,
+                     timeout: int=30):
+    """Says the message with the embed and adds menu for reactions"""
+    emoji = []
+
+    if not message:
+        await self.bot.say("I didn't get a handle to an existing message. Help!")
+        return
+
+    i = 1
+    while i <= len(beer_list):
+        emoji.append(self.emoji[i])
+        await self.bot.add_reaction(message,self.emoji[i])
+        i += 1
+
+    react = await self.bot.wait_for_reaction(message=message, timeout=timeout, emoji=emoji, user=ctx.message.author)
+    if react is None:
+        try:
+            try:
+                await self.bot.clear_reactions(message)
+            except:
+                for e in emoji:
+                    await self.bot.remove_reaction(message, e, self.bot.user)
+        except:
+            pass
+        return None
+    reacts = {v: k for k, v in self.emoji.items()}
+    react = reacts[react.reaction.emoji]
+    react -= 1
+    if len(beer_list) > react:
+#        print("React " + str(react+1) + " maps to beer " + str(beer_list[react]))
+        new_embed = await lookupBeer(self, beer_list[react])
+        await self.bot.say(embed=new_embed)
+        try:
+            try:
+                await self.bot.clear_reactions(message)
+            except:
+                for e in emoji:
+                    await self.bot.remove_reaction(message, e, self.bot.user)
+        except:
+            pass
+
+
+
+
 
 def embedme(errorStr):
     """Returns an embed object with the error string provided"""
