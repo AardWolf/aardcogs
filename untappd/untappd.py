@@ -241,7 +241,8 @@ async def lookupBeer(self,beerid):
 async def searchBeer(self,query):
     returnStr = ""
     resultStr = ""
-    qstr = urllib.parse.urlencode({'q': query})
+    qstr = urllib.parse.urlencode({'q': query,
+                                   'limit': self.settings["max_items_in_list"]})
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/search/beer?" + qstr + "&" + api_key
@@ -265,10 +266,12 @@ async def searchBeer(self,query):
                 returnStr += str(j['response']['beers']['count']) + " beers:\n"
                 beers = j['response']['beers']['items']
                 for num,beer in zip(range(self.settings["max_items_in_list"]),beers):
+                    resultStr += self.emoji[num+1] + " "
                     resultStr += str(beer['beer']['bid']) + ". [" + beer['beer']['beer_name'] + "]"
                     resultStr += "(" + "https://untappd.com/b/" + beer['beer']['beer_slug'] + "/" + str(beer['beer']['bid']) + ") "
-                    resultStr += " (" + str(human_number(int(beer['checkin_count']))) + " check ins) "
-                    resultStr += "brewed by *" + beer['brewery']['brewery_name'] + "*\n"
+                    #resultStr += " (" + str(human_number(int(beer['checkin_count']))) + ") "
+                    resultStr += "by *[" + beer['brewery']['brewery_name'] + "](https://untappd.com/w/"
+                    resultStr += beer['brewery']['brewery_slug'] +")*\n"
                     beer_list.append(beer['beer']['bid'])
                     if firstnum == 1:
                         firstnum = beer['beer']['bid']
@@ -313,6 +316,7 @@ async def profileLookup(self,profile):
             if 'checkins' in j['response']['user']:
                 for num, checkin in zip(range(self.settings["max_items_in_list"]),
                                         j['response']['user']['checkins']['items']):
+                    recentStr += str(self.emoji[num+1]) + " "
                     recentStr += str(checkin['beer']['bid']) + ". [" + checkin['beer']['beer_name']
                     recentStr += "](https://untappd.com/beer/" + str(checkin['beer']['bid']) + ")"
                     if "rating_score" in checkin:
