@@ -305,7 +305,12 @@ async def profileLookup(self,profile):
 
                     recentStr += "\n"
                     beerList.append(checkin['beer']['bid'])
-            embed = discord.Embed(title=j['response']['user']['user_name'],
+            name_str = j['response']['user']['user_name']
+            if j['response']['user']['is_supporter']:
+                name_str += " :moneybag:"
+            if j['response']['user']['is_moderator']:
+                name_str += " :crown:"
+            embed = discord.Embed(title=name_str,
                                   description=recentStr[:2048] or "No recent beers visible",
                                   url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
