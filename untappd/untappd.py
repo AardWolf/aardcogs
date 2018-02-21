@@ -327,18 +327,12 @@ async def profileLookup(self,profile):
                     recentStr += "\n"
                     beerList.append(checkin['beer']['bid'])
             name_str = j['response']['user']['user_name']
-            flair = False
-            flair_str = ""
             if j['response']['user']['is_supporter']:
-                flair_str += " " + self.settings["supporter_emoji"]
-                flair = True
+                name_str += " " + self.settings["supporter_emoji"]
             if j['response']['user']['is_moderator']:
-                flair_str += " " + self.settings["moderator_emoji"]
-                flair = True
-            if not recentStr:
-                recentStr = "No recent beers visible"
+                name_str += " " + self.settings["moderator_emoji"]
             embed = discord.Embed(title=name_str,
-                                  description=recentStr[:2048],
+                                  description=recentStr[:2048] or "No recent beers visible",
                                   url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
             embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
@@ -348,10 +342,6 @@ async def profileLookup(self,profile):
             if j['response']['user']['location']:
                 embed.add_field(name="Location", value=j['response']['user']['location'], inline=True )
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
-            if flair:
-                embed.add_field(name="Flair", value=flair_str)
-
-            #print(embed)
         else:
             embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
 
