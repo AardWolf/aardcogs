@@ -309,6 +309,7 @@ async def profileLookup(self,profile):
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
             recentStr = ""
+            #print(url)
             if 'checkins' in j['response']['user']:
                 for num, checkin in zip(range(self.settings["max_items_in_list"]),
                                         j['response']['user']['checkins']['items']):
@@ -326,21 +327,31 @@ async def profileLookup(self,profile):
                     recentStr += "\n"
                     beerList.append(checkin['beer']['bid'])
             name_str = j['response']['user']['user_name']
+            flair = False
+            flair_str = ""
             if j['response']['user']['is_supporter']:
-                name_str += " " + self.settings["supporter_emoji"]
+                flair_str += " " + self.settings["supporter_emoji"]
+                flair = True
             if j['response']['user']['is_moderator']:
-                name_str += " " + self.settings["moderator_emoji"]
+                flair_str += " " + self.settings["moderator_emoji"]
+                flair = True
+            if not recentStr:
+                recentStr = "No recent beers visible"
             embed = discord.Embed(title=name_str,
-                                  description=recentStr[:2048] or "No recent beers visible",
+                                  description=recentStr[:2048],
                                   url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
             embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
             embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
-            if "bio" in j['response']['user']:
+            if ("bio" in j['response']['user']) and (j['response']['user']['bio']):
                 embed.add_field(name="Bio", value=j['response']['user']['bio'][:1024], inline=False)
             if j['response']['user']['location']:
                 embed.add_field(name="Location", value=j['response']['user']['location'], inline=True )
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
+            if flair:
+                embed.add_field(name="Flair", value=flair_str)
+
+            #print(embed)
         else:
             embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
 
