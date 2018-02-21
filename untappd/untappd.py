@@ -20,7 +20,11 @@ class Untappd():
         self.bot = bot
         self.settings = dataIO.load_json("data/untappd/settings.json")
         if "max_items_in_list" not in self.settings:
-            sel.settings["max_items_in_list"] = 5
+            self.settings["max_items_in_list"] = 5
+        if "supporter_emoji" not in self.settings:
+            self.settings["supporter_emoji"] = ":moneybag:"
+        if "moderator_emoji" not in self.settings:
+            self.settings["moderator_emoji"] = ":crown:"
         self.session = aiohttp.ClientSession()
         self.emoji = {
             1: "1⃣",
@@ -58,6 +62,18 @@ class Untappd():
             await self.bot.say("Maximum list size is now " + str(self.settings["max_items_in_list"]))
         except TypeError:
             await self.bot.say("The new size doesn't look like an integer, keeping " + int(self.settings["max_items_in_list"]))
+
+    @untappd.command()
+    @checks.mod_or_permissions(manage_messages=True)
+    async def supporter_emoji(self, emoji: str):
+        self.settings["supporter_emoji"] = str(emoji)
+        await self.bot.say("Profiles of supporters will now display (" + str(emoji) + ")")
+
+    @untappd.command()
+    @checks.mod_or_permissions(manage_messages=True)
+    async def moderator_emoji(self, emoji: str):
+        self.settings["moderator_emoji"] = str(emoji)
+        await self.bot.say("Profiles of super users will now display (" + str(emoji) + ")")
 
     @commands.command(pass_context=True, no_pm=True)
     async def findbeer(self, ctx, *keywords):
@@ -151,7 +167,11 @@ def check_folders():
 
 def check_files():
     f = "data/untappd/settings.json"
-    data = {"CONFIG" : False, "max_items_in_list": 5}
+    data = {"CONFIG" : False,
+            "max_items_in_list": 5,
+            "supporter_emoji": ":moneybag:",
+            "moderator_emoji": ":crown:"
+            }
     if not dataIO.is_valid_json(f):
         dataIO.save_json(f, data)
     else:
@@ -305,7 +325,12 @@ async def profileLookup(self,profile):
 
                     recentStr += "\n"
                     beerList.append(checkin['beer']['bid'])
-            embed = discord.Embed(title=j['response']['user']['user_name'],
+            name_str = j['response']['user']['user_name']
+            if j['response']['user']['is_supporter']:
+                name_str += " " + self.settings["supporter_emoji"]
+            if j['response']['user']['is_moderator']:
+                name_str += " " + self.settings["moderator_emoji"]
+            embed = discord.Embed(title=name_str,
                                   description=recentStr[:2048] or "No recent beers visible",
                                   url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
