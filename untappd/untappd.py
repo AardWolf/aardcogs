@@ -8,6 +8,7 @@ import os
 import urllib.parse
 import certifi
 import json
+from __main__ import send_cmd_help
 
 #Beer: https://untappd.com/beer/<bid>
 #Brewery: https://untappd.com/brewery/<bid>
@@ -18,6 +19,8 @@ class Untappd():
     def __init__(self, bot):
         self.bot = bot
         self.settings = dataIO.load_json("data/untappd/settings.json")
+        if "max_items_in_list" not in self.settings:
+            sel.settings["max_items_in_list"] = 5
         self.session = aiohttp.ClientSession()
         self.emoji = {
             1: "1⃣",
@@ -30,7 +33,31 @@ class Untappd():
             8: "8⃣",
             9: "9⃣",
             10: "🔟",
+            "beers": ":beers:",
+            "beer": ":beer:"
             }
+
+    @commands.group(no_pm=False, invoke_without_command=False, pass_context=True)
+    async def untappd(self, ctx):
+        """Explicit Untappd things"""
+        if ctx.invoked_subcommand is None:
+            await send_cmd_help(ctx)
+
+    @untappd.command()
+    @checks.mod_or_permissions(manage_messages=True)
+    async def list_size(self, new_size: int):
+        #print ("Trying to set the list size, received " + str(new_size))
+        try:
+            new_size += 0
+            #The true maximum size is 10 because there's that many emoji
+            if new_size > 10:
+                new_size = 10
+                await selt.bot.say("Reducing the maximum size to 10 due to emoji constraints")
+            self.settings["max_items_in_list"] = new_size
+            dataIO.save_json("data/untappd/settings.json", self.settings)
+            await self.bot.say("Maximum list size is now " + str(self.settings["max_items_in_list"]))
+        except TypeError:
+            await self.bot.say("The new size doesn't look like an integer, keeping " + int(self.settings["max_items_in_list"]))
 
     @commands.command(pass_context=True, no_pm=True)
     async def findbeer(self, ctx, *keywords):
@@ -110,6 +137,7 @@ class Untappd():
         if len(keywords) == 2:
             self.settings["client_id"] = keywords[0]
             self.settings["client_secret"] = keywords[1]
+            self.settings["CONFIG"] = True
             dataIO.save_json("data/untappd/settings.json", self.settings)
             await self.bot.say("API set")
         else:
@@ -123,9 +151,21 @@ def check_folders():
 
 def check_files():
     f = "data/untappd/settings.json"
-    data = {"CONFIG" : False}
+    data = {"CONFIG" : False, "max_items_in_list": 5}
     if not dataIO.is_valid_json(f):
         dataIO.save_json(f, data)
+    else:
+        temp_settings = dataIO.load_json("data/untappd/settings.json")
+        modified = False
+        if "client_id" in temp_settings:
+            temp_settings["CONFIG"] = True
+            modified = True
+        if "max_items_in_list" not in temp_settings:
+            temp_settings["max_items_in_list"] = 5
+            modified = True
+
+        if modified:
+            dataIO.save_json(f,temp_settings)
 
 def check_credentials(settings):
     if "client_id" not in settings:
@@ -169,13 +209,10 @@ async def lookupBeer(self,beerid):
 
             if "collaborations_with" in j['response']['beer']:
                 collabStr = ""
-                i = 0
-                for collab in j['response']['beer']['collaborations_with']['items']:
+                for num,collab in zip(range(self.settings["max_items_in_list"]),
+                                      j['response']['beer']['collaborations_with']['items']):
                     collabStr += "[" + collab['brewery']['brewery_name'] + "](https://untappd.com/brewery/"
                     collabStr += str(collab['brewery']['brewery_id']) + ")\n"
-                    i += 1
-                    if i > 4:
-                        break
                 embed.add_field(name="Collaboration with", value=collabStr)
             return embed
 
@@ -206,12 +243,8 @@ async def searchBeer(self,query):
                 return await lookupBeer(self,j['response']['beers']['items'][0]['beer']['bid'])
             elif j['response']['beers']['count'] > 1:
                 returnStr += str(j['response']['beers']['count']) + " beers:\n"
-                i = 0
                 beers = j['response']['beers']['items']
-                for beer in beers:
-                    if (i >= j['response']['beers']['count']) or (i >= 5):
-                        break
-
+                for num,beer in zip(range(self.settings["max_items_in_list"]),beers):
                     resultStr += str(beer['beer']['bid']) + ". [" + beer['beer']['beer_name'] + "]"
                     resultStr += "(" + "https://untappd.com/b/" + beer['beer']['beer_slug'] + "/" + str(beer['beer']['bid']) + ") "
                     resultStr += " (" + str(human_number(int(beer['checkin_count']))) + " check ins) "
@@ -219,7 +252,6 @@ async def searchBeer(self,query):
                     beer_list.append(beer['beer']['bid'])
                     if firstnum == 1:
                         firstnum = beer['beer']['bid']
-                    i += 1
 
                 resultStr += "Look up a beer with `findbeer " + str(firstnum) + "`"
             else:
@@ -241,6 +273,7 @@ async def profileLookup(self,profile):
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret=" + self.settings["client_secret"]
 
     url = "https://api.untappd.com/v4/user/info/" + query + "?" + api_key
+    #print("Profile URL: " + url) #TODO: Add debug setting
 
     #TODO: Honor is_private flag on private profiles.
 
@@ -255,26 +288,33 @@ async def profileLookup(self,profile):
 
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
+            recentStr = ""
+            if 'checkins' in j['response']['user']:
+                for num, checkin in zip(range(self.settings["max_items_in_list"]),
+                                        j['response']['user']['checkins']['items']):
+                    recentStr += str(checkin['beer']['bid']) + ". [" + checkin['beer']['beer_name']
+                    recentStr += "](https://untappd.com/beer/" + str(checkin['beer']['bid']) + ")"
+                    if "rating_score" in checkin:
+                        if checkin['rating_score']:
+                            recentStr += " (" + str(checkin['rating_score']) + ")"
+
+                    recentStr += " by *[" + checkin['brewery']['brewery_name']
+                    recentStr += "](https://untappd.com/brewery/" + str(checkin['brewery']['brewery_id']) + ")*"
+                    if ("toasts" in checkin) and (checkin["toasts"]["count"] > 0):
+                        recentStr += " " + self.emoji["beers"] + " (" + str(checkin["toasts"]["total_count"]) + ")"
+
+                    recentStr += "\n"
+                    beerList.append(checkin['beer']['bid'])
+                embed.add_field(name="Recent Activity", value=recentStr[:1024] or "No Activity", inline=False)
             embed = discord.Embed(title=j['response']['user']['user_name'],
-                                  description=j['response']['user']['bio'][:2048] or "None",
+                                  description=recentStr[:2048] or "No recent beers visible",
                                   url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
             embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
             embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
+            embed.add_field(name="Bio", value=j['response']['user']['bio'][:1024] or "Too boring for a bio")
             if j['response']['user']['location']:
                 embed.add_field(name="Location", value=j['response']['user']['location'], inline=True )
-            recentStr = ""
-            if 'recent_brews' in j['response']['user']:
-                for checkin in j['response']['user']['recent_brews']['items']:
-                    recentStr += str(checkin['beer']['bid']) + ". [" + checkin['beer']['beer_name']
-                    recentStr += "](https://untappd.com/beer/" + str(checkin['beer']['bid']) + ")"
-                    if checkin['beer']['auth_rating']:
-                        recentStr += " (" + str(checkin['beer']['auth_rating']) + ")"
-
-                    recentStr += " brewed by *[" + checkin['brewery']['brewery_name']
-                    recentStr += "](https://untappd.com/brewery/" + str(checkin['brewery']['brewery_id']) + ")*\n"
-                    beerList.append(checkin['beer']['bid'])
-                embed.add_field(name="Recent Activity", value=recentStr[:1024] or "No Activity", inline=False)
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
         else:
             embed = discord.Embed(title="No user found", description="Search for " + profile + " resulted in no users")
@@ -295,11 +335,9 @@ async def embed_menu(self, ctx, beer_list: list,
         await self.bot.say("I didn't get a handle to an existing message. Help!")
         return
 
-    i = 1
-    while i <= len(beer_list):
-        emoji.append(self.emoji[i])
-        await self.bot.add_reaction(message,self.emoji[i])
-        i += 1
+    for num, beer in zip(range(1,self.settings["max_items_in_list"]+1),beer_list):
+        emoji.append(self.emoji[num])
+        await self.bot.add_reaction(message,self.emoji[num])
 
     react = await self.bot.wait_for_reaction(message=message, timeout=timeout, emoji=emoji, user=ctx.message.author)
     if react is None:
