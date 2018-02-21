@@ -52,7 +52,7 @@ class Untappd():
             #The true maximum size is 10 because there's that many emoji
             if new_size > 10:
                 new_size = 10
-                await selt.bot.say("Reducing the maximum size to 10 due to emoji constraints")
+                await self.bot.say("Reducing the maximum size to 10 due to emoji constraints")
             self.settings["max_items_in_list"] = new_size
             dataIO.save_json("data/untappd/settings.json", self.settings)
             await self.bot.say("Maximum list size is now " + str(self.settings["max_items_in_list"]))
@@ -305,14 +305,14 @@ async def profileLookup(self,profile):
 
                     recentStr += "\n"
                     beerList.append(checkin['beer']['bid'])
-                embed.add_field(name="Recent Activity", value=recentStr[:1024] or "No Activity", inline=False)
             embed = discord.Embed(title=j['response']['user']['user_name'],
                                   description=recentStr[:2048] or "No recent beers visible",
                                   url=j['response']['user']['untappd_url'])
             embed.add_field(name="Checkins", value=str(j['response']['user']['stats']['total_checkins']), inline=True )
             embed.add_field(name="Uniques", value=str(j['response']['user']['stats']['total_beers']), inline=True )
             embed.add_field(name="Badges", value=str(j['response']['user']['stats']['total_badges']), inline=True)
-            embed.add_field(name="Bio", value=j['response']['user']['bio'][:1024] or "Too boring for a bio")
+            if "bio" in j['response']['user']:
+                embed.add_field(name="Bio", value=j['response']['user']['bio'][:1024], inline=False)
             if j['response']['user']['location']:
                 embed.add_field(name="Location", value=j['response']['user']['location'], inline=True )
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
