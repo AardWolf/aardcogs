@@ -37,8 +37,8 @@ class Untappd():
             8: "8⃣",
             9: "9⃣",
             10: "🔟",
-            "beers": ":beers:",
-            "beer": ":beer:"
+            "beers": "🍻",
+            "beer": "🍺"
             }
 
     @commands.group(no_pm=False, invoke_without_command=False, pass_context=True)
@@ -67,12 +67,14 @@ class Untappd():
     @checks.mod_or_permissions(manage_messages=True)
     async def supporter_emoji(self, emoji: str):
         self.settings["supporter_emoji"] = str(emoji)
+        dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.say("Profiles of supporters will now display (" + str(emoji) + ")")
 
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
     async def moderator_emoji(self, emoji: str):
         self.settings["moderator_emoji"] = str(emoji)
+        dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.say("Profiles of super users will now display (" + str(emoji) + ")")
 
     @commands.command(pass_context=True, no_pm=True)
@@ -139,9 +141,12 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         results = await profileLookup(self,profile)
-        embed = results["embed"]
-        if "beer_list" in results:
-            beer_list = results["beer_list"]
+        if (type(results) == type(dict())) and ("embed" in results):
+            embed = results["embed"]
+            if "beer_list" in results:
+                beer_list = results["beer_list"]
+        else:
+            embed = results
         message = await self.bot.say(resultStr, embed=embed)
         if len(beer_list) > 1:
             await embed_menu(self, ctx, beer_list, message, 30)
