@@ -132,10 +132,11 @@ class Untappd():
             await embed_menu(self, ctx, beer_list, message, 30)
 
     @commands.command(pass_context=True, no_pm=False)
-    async def findbeer1(self, ctx, keywords):
+    async def findbeer1(self, ctx, *keywords):
         beer_list = []
         embed = False
         resultStr = ""
+        await self.bot.send_typing(ctx.message.channel)
         results = await searchBeer(self, keywords, limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
