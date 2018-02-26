@@ -85,6 +85,9 @@ class Untappd():
         await self.bot.say("Profiles of super users will now display (" +
                            str(emoji) + ")")
 
+#    @untappd.command(pass_context=True, no_pm=False)
+#    async def auth_me(self, ctx, *keywords)
+
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
         """Search Untappd.com using the API"""
@@ -136,11 +139,9 @@ class Untappd():
         results = await searchBeer(self, keywords, limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
+            await self.bot.say(resultStr, embed=embed)
         else:
-            embed = results
-
-        if embed:
-            message = await self.bot.say(resultStr, embed=embed)
+            await self.bot.say(resultStr, embed=results)
 
     @commands.command(pass_context=True, no_pm=False)
     async def profile(self, ctx, profile: str):
@@ -300,15 +301,16 @@ async def searchBeer(self, query, limit=None):
 
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
 #    print(url)
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        else:
-            return embedme("Beer search failed with code " + str(resp.status))
+    try:
+        async with self.session.get(url) as resp:
+            if resp.status == 200:
+                j = await resp.json()
+            else:
+                return embedme("Beer search failed with code " + str(resp.status))
 
-        beers = []
-        beer_list = []
-        firstnum = 1
+            beers = []
+            beer_list = []
+            firstnum = 1
 
         # Confirm success
         if j['meta']['code'] == 200:
@@ -341,6 +343,14 @@ async def searchBeer(self, query, limit=None):
                 returnStr += "no beers"
                 # print(json.dumps(j, indent=4))
 
+    except (aiohttp.errors.ClientResponseError,
+            aiohttp.errors.ClientRequestError,
+            aiohttp.errors.ClientOSError,
+            aiohttp.errors.ClientDisconnectedError,
+            aiohttp.errors.ClientTimeoutError,
+            asyncio.TimeoutError,
+            aiohttp.errors.HttpProcessingError) as exc:
+        return embedme("Search failed with {%s}".format(exc))
     embed = discord.Embed(title=returnStr, description=resultStr[:2048])
     result = dict()
     result["embed"] = embed
@@ -403,10 +413,11 @@ async def profileLookup(self, profile):
                     recentStr += "\n"
                     beerList.append(checkin['beer']['bid'])
             name_str = j['response']['user']['user_name']
+            flair_str = ""
             if j['response']['user']['is_supporter']:
-                name_str += " " + self.settings["supporter_emoji"]
+                flair_str += self.settings["supporter_emoji"]
             if j['response']['user']['is_moderator']:
-                name_str += " " + self.settings["moderator_emoji"]
+                flair_str += self.settings["moderator_emoji"]
             embed = discord.Embed(title=name_str,
                                   description=recentStr[:2048]
                                   or "No recent beers visible",
@@ -431,6 +442,10 @@ async def profileLookup(self, profile):
             if j['response']['user']['location']:
                 embed.add_field(name="Location",
                                 value=j['response']['user']['location'],
+                                inline=True)
+            if flair_str:
+                embed.add_field(name="Flair",
+                                value=flair_str,
                                 inline=True)
             embed.set_thumbnail(url=j['response']['user']['user_avatar'])
         else:
@@ -466,10 +481,10 @@ async def embed_menu(self, ctx, beer_list: list,
         try:
             try:
                 await self.bot.clear_reactions(message)
-            except Forbidden:
+            except discord.Forbidden:
                 for e in emoji:
                     await self.bot.remove_reaction(message, e, self.bot.user)
-        except Forbidden:
+        except discord.Forbidden:
             pass
         return None
     reacts = {v: k for k, v in self.emoji.items()}
@@ -481,10 +496,10 @@ async def embed_menu(self, ctx, beer_list: list,
         try:
             try:
                 await self.bot.clear_reactions(message)
-            except Forbidden:
+            except discord.Forbidden:
                 for e in emoji:
                     await self.bot.remove_reaction(message, e, self.bot.user)
-        except Forbidden:
+        except discord.Forbidden:
             pass
 
 
