@@ -53,7 +53,7 @@ class Untappd():
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
     async def list_size(self, new_size: int):
-        # print ("Trying to set the list size, received " + str(new_size))
+        """The length of lists of results"""
         try:
             new_size += 0
             # The true maximum size is 10 because there's that many emoji
@@ -72,6 +72,7 @@ class Untappd():
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
     async def supporter_emoji(self, emoji: str):
+        """The moji to use for supporters"""
         self.settings["supporter_emoji"] = str(emoji)
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.say("Profiles of supporters will now display (" +
@@ -80,13 +81,32 @@ class Untappd():
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
     async def moderator_emoji(self, emoji: str):
+        """The emoji to use for super users"""
         self.settings["moderator_emoji"] = str(emoji)
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.say("Profiles of super users will now display (" +
                            str(emoji) + ")")
 
-#    @untappd.command(pass_context=True, no_pm=False)
-#    async def auth_me(self, ctx, *keywords)
+    @untappd.command(pass_context=True, no_pm=True)
+    async def setnick(self, ctx, keywords):
+        """Set your untappd user name to use for future commands"""
+        # TODO: Replace future commands with the commands
+        if (ctx.message.server):
+            server = str(ctx.message.server)
+            if server not in self.settings:
+                self.settings[server] = {}
+            author = str(ctx.message.author.id)
+            if author not in self.settings[server]:
+                self.settings[server][author] = {}
+            self.settings[server][author]["nick"] = keywords
+            await self.bot.say("When you look yourself up on untappd" +
+                               " I will use `" + keywords + "`")
+            dataIO.save_json("data/untappd/settings.json", self.settings)
+        else:
+            await self.bot.say("I was unable to set that for this server")
+            print ("Channel type: {!s}".format(ctx.message.channel.type))
+            print ("Guild: {!s}".format(ctx.message.server))
+
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
@@ -145,13 +165,15 @@ class Untappd():
             await self.bot.say(resultStr, embed=results)
 
     @commands.command(pass_context=True, no_pm=False)
-    async def profile(self, ctx, profile: str):
+    async def profile(self, ctx, profile: str=None):
         """Search for a user's information by providing their profile name,
         discord mentions OK"""
 
         embed = False
         beer_list = []
         resultStr = ""
+        author = ctx.message.author
+        guild = str(ctx.message.server)
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -165,6 +187,13 @@ class Untappd():
             else:
                 profile = ctx.message.mentions[0].name
 
+        if not profile:
+            try:
+                profile = self.settings[guild][author.id]["nick"]
+            except KeyError:
+                profile = None
+        if not profile:
+            profile = author.display_name
         await self.bot.send_typing(ctx.message.channel)
         results = await profileLookup(self, profile)
         if (isinstance(results, dict)) and ("embed" in results):
