@@ -164,6 +164,43 @@ class Untappd():
         else:
             await self.bot.say(resultStr, embed=results)
 
+    @commands.command(pass_context=True)
+    async def lastbeer(self, ctx, profile: str=None):
+        """Displays details for the last beer a person had"""
+
+        embed = False
+        beer_list = []
+        resultStr = ""
+        author = ctx.message.author
+        guild = str(ctx.message.server)
+
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information " +
+                               "and should use the `untappd_apikey` command")
+            return
+
+#        await self.bot.say("I got a user " + profile)
+        if ctx.message.mentions:
+            if ctx.message.mentions[0].nick:
+                profile = ctx.message.mentions[0].nick
+            else:
+                profile = ctx.message.mentions[0].name
+
+        if not profile:
+            try:
+                profile = self.settings[guild][author.id]["nick"]
+            except KeyError:
+                profile = None
+        if not profile:
+            profile = author.display_name
+        await self.bot.send_typing(ctx.message.channel)
+        results = await profileToBeer(self,profile)
+        if (isinstance(results, dict)) and ("embed" in results):
+            embed = results["embed"]
+        else:
+            embed = results
+        await self.bot.say(resultStr, embed=embed)
+
     @commands.command(pass_context=True, no_pm=False)
     async def profile(self, ctx, profile: str=None):
         """Search for a user's information by providing their profile name,
@@ -267,7 +304,7 @@ def setup(bot):
     bot.add_cog(Untappd(bot))
 
 
-async def lookupBeer(self, beerid):
+async def lookupBeer(self, beerid, rating=None):
     returnStr = ""
 
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret="
@@ -302,6 +339,10 @@ async def lookupBeer(self, beerid):
             embed.add_field(name="Rating", value=rating_str, inline=True)
             embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
             embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
+            if rating:
+                embed.add_field(name="Checkin Rating",
+                                value=str(rating),
+                                inline=True)
             embed.set_thumbnail(url=beer['beer_label'])
 
             if "collaborations_with" in j['response']['beer']:
@@ -319,7 +360,7 @@ async def lookupBeer(self, beerid):
     return embedme("A problem")
 
 
-async def searchBeer(self, query, limit=None):
+async def searchBeer(self, query, limit=None, rating=None):
     returnStr = ""
     resultStr = ""
     qstr = urllib.parse.urlencode({
@@ -387,6 +428,40 @@ async def searchBeer(self, query, limit=None):
     if beer_list:
         result["beer_list"] = beer_list
     return (result)
+
+
+async def profileToBeer(self, profile):
+    returnStr = ""
+    qstr = urllib.parse.urlencode({
+        "client_id": self.settings["client_id"],
+        "client_secret": self.settings["client_secret"]
+        })
+    url = "https://api.untappd.com/v4/user/info/{}?{}".format(profile, qstr)
+    beerid = None
+    rating = None
+
+    async with self.session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        elif resp.status == 500:
+            return embedme("The profile '{}' doesn't exist".format(profile))
+        else:
+            print("Profile lookup '{!s}' failed: {}".format(url,resp.status))
+            return embedme("Profile lookup for '{}' failed".format(profile))
+
+        if j['meta']['code'] == 200:
+            try:
+                checkin = j['response']['user']['checkins']['items'][0]
+                beerid = checkin['beer']['bid']
+                if "rating_score" in checkin:
+                    rating = checkin["rating_score"]
+            except KeyError:
+                return embedme("No recent checkins for {}".format(profile))
+
+    if beerid:
+        return await lookupBeer(self,beerid=beerid,rating=rating)
+    else:
+        return embedme("User '{!s}' did not have a recent beer".format(profile))
 
 
 async def profileLookup(self, profile):
