@@ -4,10 +4,7 @@ from cogs.utils import checks
 import aiohttp
 from .utils.dataIO import dataIO
 import os
-# import asyncio
 import urllib.parse
-import certifi
-import json
 from __main__ import send_cmd_help
 
 # Beer: https://untappd.com/beer/<bid>
@@ -43,8 +40,8 @@ class Untappd():
             "beer": "🍺"
             }
 
-    @commands.group(
-        no_pm=False, invoke_without_command=False, pass_context=True)
+    @commands.group(no_pm=False, invoke_without_command=False,
+                    pass_context=True)
     async def untappd(self, ctx):
         """Explicit Untappd things"""
         if ctx.invoked_subcommand is None:
@@ -104,15 +101,13 @@ class Untappd():
             dataIO.save_json("data/untappd/settings.json", self.settings)
         else:
             await self.bot.say("I was unable to set that for this server")
-            print ("Channel type: {!s}".format(ctx.message.channel.type))
-            print ("Guild: {!s}".format(ctx.message.server))
-
+            print("Channel type: {!s}".format(ctx.message.channel.type))
+            print("Guild: {!s}".format(ctx.message.server))
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
         """Search Untappd.com using the API"""
         """A search uses characters, a lookup uses numbers"""
-        lookup = False
         embed = False
         beer_list = []
         resultStr = ""
@@ -130,7 +125,6 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
-            lookup = True
             embed = await lookupBeer(self, keywords)
             # await self.bot.say( embed=embed)
         else:
@@ -153,7 +147,6 @@ class Untappd():
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer1(self, ctx, *keywords):
-        beer_list = []
         embed = False
         resultStr = ""
         await self.bot.send_typing(ctx.message.channel)
@@ -169,7 +162,6 @@ class Untappd():
         """Displays details for the last beer a person had"""
 
         embed = False
-        beer_list = []
         resultStr = ""
         author = ctx.message.author
         guild = str(ctx.message.server)
@@ -194,7 +186,7 @@ class Untappd():
         if not profile:
             profile = author.display_name
         await self.bot.send_typing(ctx.message.channel)
-        results = await profileToBeer(self,profile)
+        results = await profileToBeer(self, profile)
         if (isinstance(results, dict)) and ("embed" in results):
             embed = results["embed"]
         else:
@@ -305,7 +297,7 @@ def setup(bot):
 
 
 async def lookupBeer(self, beerid, rating=None):
-    returnStr = ""
+    """Look up a beer by id"""
 
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret="
     api_key += self.settings["client_secret"]
@@ -377,7 +369,8 @@ async def searchBeer(self, query, limit=None, rating=None):
             if resp.status == 200:
                 j = await resp.json()
             else:
-                return embedme("Beer search failed with code " + str(resp.status))
+                return embedme("Beer search failed with code " +
+                               str(resp.status))
 
             beers = []
             beer_list = []
@@ -419,7 +412,6 @@ async def searchBeer(self, query, limit=None, rating=None):
             aiohttp.errors.ClientOSError,
             aiohttp.errors.ClientDisconnectedError,
             aiohttp.errors.ClientTimeoutError,
-            asyncio.TimeoutError,
             aiohttp.errors.HttpProcessingError) as exc:
         return embedme("Search failed with {%s}".format(exc))
     embed = discord.Embed(title=returnStr, description=resultStr[:2048])
@@ -431,7 +423,7 @@ async def searchBeer(self, query, limit=None, rating=None):
 
 
 async def profileToBeer(self, profile):
-    returnStr = ""
+    """Takes a profile and returns the last beerid checked in"""
     qstr = urllib.parse.urlencode({
         "client_id": self.settings["client_id"],
         "client_secret": self.settings["client_secret"]
@@ -446,7 +438,7 @@ async def profileToBeer(self, profile):
         elif resp.status == 500:
             return embedme("The profile '{}' doesn't exist".format(profile))
         else:
-            print("Profile lookup '{!s}' failed: {}".format(url,resp.status))
+            print("Profile lookup '{!s}' failed: {}".format(url, resp.status))
             return embedme("Profile lookup for '{}' failed".format(profile))
 
         if j['meta']['code'] == 200:
@@ -459,13 +451,16 @@ async def profileToBeer(self, profile):
                 return embedme("No recent checkins for {}".format(profile))
 
     if beerid:
-        return await lookupBeer(self,beerid=beerid,rating=rating)
+        return await lookupBeer(self,
+                                beerid=beerid,
+                                rating=rating)
     else:
-        return embedme("User '{!s}' did not have a recent beer".format(profile))
+        return embedme("User '{!s}' did not have a recent beer"
+                       .format(profile))
 
 
 async def profileLookup(self, profile):
-    returnStr = ""
+    """Looks up a profile in untappd by username"""
     query = urllib.parse.quote_plus(profile)
     embed = False
     beerList = []
