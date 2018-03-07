@@ -394,9 +394,12 @@ async def searchBeer(self, query, limit=None, rating=None):
                     resultStr += "(" + "https://untappd.com/b/"
                     resultStr += beer['beer']['beer_slug'] + "/"
                     resultStr += str(beer['beer']['bid']) + ") "
-                    resultStr += "by *[" + beer['brewery']['brewery_name']
-                    resultStr += "](https://untappd.com/w/"
-                    resultStr += beer['brewery']['brewery_slug'] + ")*\n"
+                    brewery = ("by *[{!s}](https://untappd.com/w/"
+                               "{!s}/{!s})*").format(
+                                beer['brewery']['brewery_name'],
+                                beer['brewery']['brewery_slug'],
+                                beer['brewery']['brewery_id'])
+                    resultStr += brewery + "\n"
                     beer_list.append(beer['beer']['bid'])
                     if firstnum == 1:
                         firstnum = beer['beer']['bid']
