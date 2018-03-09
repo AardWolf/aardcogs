@@ -239,7 +239,7 @@ class Untappd():
             await embed_menu(self, ctx, beer_list, message, 30)
         return
 
-    @commands.command(pass_context=True, no_pm=False)
+    @untappd.command(pass_context=True, no_pm=False)
     @checks.is_owner()
     async def untappd_apikey(self, ctx, *keywords):
         """Sets the id and secret that you got from applying for
