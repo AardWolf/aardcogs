@@ -225,8 +225,9 @@ class Untappd():
             profile = author.display_name
         await self.bot.send_typing(ctx.message.channel)
         results = await profileLookup(self, profile)
-        if (isinstance(results, dict)) and ("embed" in results):
-            embed = results["embed"]
+        if isinstance(results, dict):
+            if "embed" in results:
+                embed = results["embed"]
             if "beer_list" in results:
                 beer_list = results["beer_list"]
         else:
