@@ -494,69 +494,7 @@ async def profileLookup(self, profile):
 
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
-            recentStr = ""
-            # print(url)
-            if 'checkins' in j['response']['user']:
-                for num, checkin in zip(
-                        range(self.settings["max_items_in_list"]),
-                        j['response']['user']['checkins']['items']):
-                    recentStr += str(self.emoji[num+1]) + " "
-                    recentStr += str(checkin['beer']['bid']) + ". ["
-                    recentStr += checkin['beer']['beer_name']
-                    recentStr += "](https://untappd.com/beer/"
-                    recentStr += str(checkin['beer']['bid']) + ")"
-                    if "rating_score" in checkin:
-                        if checkin['rating_score']:
-                            recentStr += " (" + str(checkin['rating_score'])
-                            recentStr += ")"
-
-                    recentStr += " by *[" + checkin['brewery']['brewery_name']
-                    recentStr += "](https://untappd.com/brewery/"
-                    recentStr += str(checkin['brewery']['brewery_id']) + ")*"
-                    if (("toasts" in checkin) and
-                            (checkin["toasts"]["count"] > 0)):
-                        recentStr += " " + self.emoji["beers"] + " ("
-                        recentStr += str(checkin["toasts"]["total_count"])
-                        recentStr += ")"
-
-                    recentStr += "\n"
-                    beerList.append(checkin['beer']['bid'])
-            name_str = j['response']['user']['user_name']
-            flair_str = ""
-            if j['response']['user']['is_supporter']:
-                flair_str += self.settings["supporter_emoji"]
-            if j['response']['user']['is_moderator']:
-                flair_str += self.settings["moderator_emoji"]
-            embed = discord.Embed(title=name_str,
-                                  description=recentStr[:2048]
-                                  or "No recent beers visible",
-                                  url=j['response']['user']['untappd_url'])
-            embed.add_field(
-                name="Checkins",
-                value=str(j['response']['user']['stats']['total_checkins']),
-                inline=True)
-            embed.add_field(
-                name="Uniques",
-                value=str(j['response']['user']['stats']['total_beers']),
-                inline=True)
-            embed.add_field(
-                name="Badges",
-                value=str(j['response']['user']['stats']['total_badges']),
-                inline=True)
-            if (("bio" in j['response']['user'])
-                    and (j['response']['user']['bio'])):
-                embed.add_field(name="Bio",
-                                value=j['response']['user']['bio'][:1024],
-                                inline=False)
-            if j['response']['user']['location']:
-                embed.add_field(name="Location",
-                                value=j['response']['user']['location'],
-                                inline=True)
-            if flair_str:
-                embed.add_field(name="Flair",
-                                value=flair_str,
-                                inline=True)
-            embed.set_thumbnail(url=j['response']['user']['user_avatar'])
+            (embed, beerList) = user_to_embed(self, j['response']['user'])
         else:
             embed = discord.Embed(
                 title="No user found",
@@ -567,6 +505,75 @@ async def profileLookup(self, profile):
     if beerList:
         result["beer_list"] = beerList
     return result
+
+
+def user_to_embed(self, user):
+    """Takes the user portion of a json response and returns an embed \
+and a beer list"""
+    beerList = []
+    if 'checkins' in user:
+        recentStr = ""
+        for num, checkin in zip(
+                range(self.settings["max_items_in_list"]),
+                user['checkins']['items']):
+            checkinStr = ("{!s} {!s}. [{!s}](https://untappd.com/beer/{!s})"
+                          .format(self.emoji[num+1],
+                                  checkin['beer']['bid'],
+                                  checkin['beer']['beer_name'],
+                                  checkin['beer']['bid']))
+            if "rating_score" in checkin:
+                if checkin['rating_score']:
+                    checkinStr += " ({!s})".format(checkin['rating_score'])
+
+            checkinStr += (" by [{!s}](https://untappd.com/brewery/{!s})"
+                           .format(checkin['brewery']['brewery_name'],
+                                   checkin['brewery']['brewery_id']))
+            if (("toasts" in checkin) and
+                    (checkin["toasts"]["count"] > 0)):
+                checkinStr += (" {!s} ({!s})"
+                               .format(self.emoji["beers"],
+                                       checkin["toasts"]["total_count"]))
+            recentStr += checkinStr
+
+            recentStr += "\n"
+            beerList.append(checkin['beer']['bid'])
+    name_str = user['user_name']
+    flair_str = ""
+    if user['is_supporter']:
+        flair_str += self.settings["supporter_emoji"]
+    if user['is_moderator']:
+        flair_str += self.settings["moderator_emoji"]
+    embed = discord.Embed(title=name_str,
+                          description=recentStr[:2048]
+                          or "No recent beers visible",
+                          url=user['untappd_url'])
+    embed.add_field(
+        name="Checkins",
+        value=str(user['stats']['total_checkins']),
+        inline=True)
+    embed.add_field(
+        name="Uniques",
+        value=str(user['stats']['total_beers']),
+        inline=True)
+    embed.add_field(
+        name="Badges",
+        value=str(user['stats']['total_badges']),
+        inline=True)
+    if (("bio" in user)
+            and (user['bio'])):
+        embed.add_field(name="Bio",
+                        value=user['bio'][:1024],
+                        inline=False)
+    if user['location']:
+        embed.add_field(name="Location",
+                        value=user['location'],
+                        inline=True)
+    if flair_str:
+        embed.add_field(name="Flair",
+                        value=flair_str,
+                        inline=True)
+    embed.set_thumbnail(url=user['user_avatar'])
+    return (embed, beerList)
 
 
 async def embed_menu(self, ctx, beer_list: list,
