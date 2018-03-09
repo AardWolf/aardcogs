@@ -230,10 +230,14 @@ class Untappd():
             if "beer_list" in results:
                 beer_list = results["beer_list"]
         else:
-            embed = results
-        message = await self.bot.say(resultStr, embed=embed)
+            resultStr = results
+        if embed:
+            message = await self.bot.say(resultStr, embed=embed)
+        else:
+            message = await self.bot.say(resultStr)
         if len(beer_list) > 1:
             await embed_menu(self, ctx, beer_list, message, 30)
+        return
 
     @commands.command(pass_context=True, no_pm=False)
     @checks.is_owner()
@@ -479,12 +483,13 @@ async def profileLookup(self, profile):
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
+        elif resp.status == 404:
+            return "The profile '{!s}' does not exist".format(profile)
         elif resp.status == 500:
-            return embedme("The profile '" + profile + "' does not exist")
+            return "The untappd server is having an error"
         else:
             print("Failed for url: " + url)
-            return embedme("Profile query failed with code " +
-                           str(resp.status))
+            return "Profile query failed with code {!s}".format(resp.status)
 
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
