@@ -47,24 +47,30 @@ class Untappd():
         if ctx.invoked_subcommand is None:
             await send_cmd_help(ctx)
 
-    @untappd.command()
+    @untappd.command(no_pm=True, pass_context=True)
     @checks.mod_or_permissions(manage_messages=True)
-    async def list_size(self, new_size: int):
-        """The length of lists of results"""
+    async def list_size(self, ctx, new_size: int):
+        """The length of lists of resultsm specific to a server now"""
+        is_pm = True
         try:
-            new_size += 0
-            # The true maximum size is 10 because there's that many emoji
-            if new_size > 10:
-                new_size = 10
-                await self.bot.say("Reducing the maximum size to " +
-                                   "10 due to emoji constraints")
+            server = ctx.message.server.id
+            if server not in self.settings:
+                self.settings[server] = {}
+            is_pm = False
+        except KeyError:
+            is_pm = True
+        new_size += 0
+        # The true maximum size is 10 because there's that many emoji
+        if new_size > 10:
+            new_size = 10
+            await self.bot.say("Reducing the maximum size to " +
+                               "10 due to emoji constraints")
+        if is_pm:
             self.settings["max_items_in_list"] = new_size
-            dataIO.save_json("data/untappd/settings.json", self.settings)
-            await self.bot.say("Maximum list size is now " +
-                               str(self.settings["max_items_in_list"]))
-        except TypeError:
-            await self.bot.say("The new size isn't an integer, keeping " +
-                               str(self.settings["max_items_in_list"]))
+        else:
+            self.settings[server]["max_items_in_list"] = new_size
+        dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.say("Maximum list size is now {!s}".format(new_size))
 
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
@@ -89,10 +95,10 @@ class Untappd():
         """Set your untappd user name to use for future commands"""
         # TODO: Replace future commands with the commands
         if (ctx.message.server):
-            server = str(ctx.message.server)
+            server = ctx.message.server.id
             if server not in self.settings:
                 self.settings[server] = {}
-            author = str(ctx.message.author.id)
+            author = ctx.message.author.id
             if author not in self.settings[server]:
                 self.settings[server][author] = {}
             self.settings[server][author]["nick"] = keywords
@@ -111,6 +117,7 @@ class Untappd():
         embed = False
         beer_list = []
         resultStr = ""
+        list_limit = list_size(self, ctx.message.server)
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -125,10 +132,10 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
-            embed = await lookupBeer(self, keywords)
+            embed = await lookupBeer(self, keywords, list_size=1)
             # await self.bot.say( embed=embed)
         else:
-            results = await searchBeer(self, keywords)
+            results = await searchBeer(self, keywords, limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
                 if "beer_list" in results:
@@ -209,12 +216,14 @@ class Untappd():
                                "and should use the `untappd_apikey` command")
             return
 
-#        await self.bot.say("I got a user " + profile)
         if ctx.message.mentions:
-            if ctx.message.mentions[0].nick:
-                profile = ctx.message.mentions[0].nick
-            else:
-                profile = ctx.message.mentions[0].name
+            # If user has set a nickname, use that - but only if it's not a PM
+            if ctx.message.server:
+                user = ctx.message.mentions[0]
+                try:
+                    profile = self.settings[guild][user.id]["nick"]
+                except KeyError:
+                    profile = user.display_name
 
         if not profile:
             try:
@@ -223,8 +232,11 @@ class Untappd():
                 profile = None
         if not profile:
             profile = author.display_name
+            print("Using '{}'".format(profile))
         await self.bot.send_typing(ctx.message.channel)
-        results = await profileLookup(self, profile)
+        results = await profileLookup(self, profile,
+                                      limit=list_size(self,
+                                                      ctx.message.server))
         if isinstance(results, dict):
             if "embed" in results:
                 embed = results["embed"]
@@ -301,7 +313,7 @@ def setup(bot):
     bot.add_cog(Untappd(bot))
 
 
-async def lookupBeer(self, beerid, rating=None):
+async def lookupBeer(self, beerid, rating=None, list_size=5):
     """Look up a beer by id"""
 
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret="
@@ -344,10 +356,8 @@ async def lookupBeer(self, beerid, rating=None):
 
             if "collaborations_with" in j['response']['beer']:
                 collabStr = ""
-                for num, collab in zip(range(
-                        self.settings["max_items_in_list"]),
-                        j['response']['beer']['collaborations_with']['items']
-                        ):
+                collabs = j['response']['beer']['collaborations_with']['items']
+                for collab in collabs:
                     collabStr += "[" + collab['brewery']['brewery_name']
                     collabStr += "](https://untappd.com/brewery/"
                     collabStr += str(collab['brewery']['brewery_id']) + ")\n"
@@ -360,9 +370,10 @@ async def lookupBeer(self, beerid, rating=None):
 async def searchBeer(self, query, limit=None, rating=None):
     returnStr = ""
     resultStr = ""
+    list_limit = limit or list_size(self, None)
     qstr = urllib.parse.urlencode({
         "q": query,
-        "limit": limit or self.settings["max_items_in_list"],
+        "limit": list_limit,
         "client_id": self.settings["client_id"],
         "client_secret": self.settings["client_secret"]
         })
@@ -387,11 +398,12 @@ async def searchBeer(self, query, limit=None, rating=None):
             returnStr += " found "
             if j['response']['beers']['count'] == 1:
                 return await lookupBeer(
-                    self, j['response']['beers']['items'][0]['beer']['bid'])
+                    self, j['response']['beers']['items'][0]['beer']['bid'],
+                    list_size=limit)
             elif j['response']['beers']['count'] > 1:
                 returnStr += str(j['response']['beers']['count']) + " beers:\n"
                 beers = j['response']['beers']['items']
-                for num, beer in zip(range(self.settings["max_items_in_list"]),
+                for num, beer in zip(range(list_limit),
                                      beers):
                     resultStr += self.emoji[num+1] + " "
                     resultStr += str(beer['beer']['bid']) + ". ["
@@ -467,7 +479,7 @@ async def profileToBeer(self, profile):
                        .format(profile))
 
 
-async def profileLookup(self, profile):
+async def profileLookup(self, profile, limit=5):
     """Looks up a profile in untappd by username"""
     query = urllib.parse.quote_plus(profile)
     embed = False
@@ -494,7 +506,8 @@ async def profileLookup(self, profile):
 
 #        print (json.dumps(j['response'],indent=4))
         if j['meta']['code'] == 200:
-            (embed, beerList) = user_to_embed(self, j['response']['user'])
+            (embed, beerList) = user_to_embed(self, j['response']['user'],
+                                              limit)
         else:
             embed = discord.Embed(
                 title="No user found",
@@ -507,15 +520,13 @@ async def profileLookup(self, profile):
     return result
 
 
-def user_to_embed(self, user):
+def user_to_embed(self, user, limit=5):
     """Takes the user portion of a json response and returns an embed \
 and a beer list"""
     beerList = []
     if 'checkins' in user:
         recentStr = ""
-        for num, checkin in zip(
-                range(self.settings["max_items_in_list"]),
-                user['checkins']['items']):
+        for num, checkin in zip(range(limit), user['checkins']['items']):
             checkinStr = ("{!s} {!s}. [{!s}](https://untappd.com/beer/{!s})"
                           .format(self.emoji[num+1],
                                   checkin['beer']['bid'],
@@ -581,13 +592,13 @@ async def embed_menu(self, ctx, beer_list: list,
                      timeout: int=30):
     """Says the message with the embed and adds menu for reactions"""
     emoji = []
+    limit = list_size(self, ctx.message.server)
 
     if not message:
         await self.bot.say("I didn't get a handle to an existing message.")
         return
 
-    for num, beer in zip(
-            range(1, self.settings["max_items_in_list"]+1), beer_list):
+    for num, beer in zip(range(1, limit+1), beer_list):
         emoji.append(self.emoji[num])
         await self.bot.add_reaction(message, self.emoji[num])
 
@@ -607,7 +618,7 @@ async def embed_menu(self, ctx, beer_list: list,
     react = reacts[react.reaction.emoji]
     react -= 1
     if len(beer_list) > react:
-        new_embed = await lookupBeer(self, beer_list[react])
+        new_embed = await lookupBeer(self, beer_list[react], list_size=1)
         await self.bot.say(embed=new_embed)
         try:
             try:
@@ -617,6 +628,16 @@ async def embed_menu(self, ctx, beer_list: list,
                     await self.bot.remove_reaction(message, e, self.bot.user)
         except discord.Forbidden:
             pass
+
+
+def list_size(self, server=None):
+    """Returns a list size if configured for the server or the default size"""
+    if server:
+        try:
+            list_size = self.settings[server.id]["max_items_in_list"]
+        except KeyError:
+            list_size = self.settings["max_items_in_list"]
+    return list_size
 
 
 def embedme(errorStr):
