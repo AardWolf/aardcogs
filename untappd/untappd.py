@@ -150,7 +150,7 @@ class Untappd():
         embed = False
         resultStr = ""
         await self.bot.send_typing(ctx.message.channel)
-        results = await searchBeer(self, keywords, limit=1)
+        results = await searchBeer(self, " ".join(keywords), limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
             await self.bot.say(resultStr, embed=embed)
