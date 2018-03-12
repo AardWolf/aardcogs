@@ -171,7 +171,7 @@ class Untappd():
         embed = False
         resultStr = ""
         author = ctx.message.author
-        guild = str(ctx.message.server)
+        guild = str(ctx.message.server.id)
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -180,10 +180,13 @@ class Untappd():
 
 #        await self.bot.say("I got a user " + profile)
         if ctx.message.mentions:
-            if ctx.message.mentions[0].nick:
-                profile = ctx.message.mentions[0].nick
-            else:
-                profile = ctx.message.mentions[0].name
+            # If user has set a nickname, use that - but only if it's not a PM
+            if ctx.message.server:
+                user = ctx.message.mentions[0]
+                try:
+                    profile = self.settings[guild][user.id]["nick"]
+                except KeyError:
+                    profile = user.display_name
 
         if not profile:
             try:
@@ -467,7 +470,7 @@ async def profileToBeer(self, profile):
                 beerid = checkin['beer']['bid']
                 if "rating_score" in checkin:
                     rating = checkin["rating_score"]
-            except KeyError:
+            except (KeyError, IndexError):
                 return embedme("No recent checkins for {}".format(profile))
 
     if beerid:
