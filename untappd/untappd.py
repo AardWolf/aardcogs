@@ -209,7 +209,7 @@ class Untappd():
         beer_list = []
         resultStr = ""
         author = ctx.message.author
-        guild = str(ctx.message.server)
+        guild = str(ctx.message.server.id)
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
