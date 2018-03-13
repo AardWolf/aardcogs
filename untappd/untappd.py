@@ -94,6 +94,8 @@ class Untappd():
     async def setnick(self, ctx, keywords):
         """Set your untappd user name to use for future commands"""
         # TODO: Replace future commands with the commands
+        if not keywords:
+            await send_cmd_help(ctx)
         if (ctx.message.server):
             server = ctx.message.server.id
             if server not in self.settings:
@@ -109,6 +111,33 @@ class Untappd():
             await self.bot.say("I was unable to set that for this server")
             print("Channel type: {!s}".format(ctx.message.channel.type))
             print("Guild: {!s}".format(ctx.message.server))
+
+    @untappd.command(pass_context=True, no_pm=False)
+    async def authme(self, ctx):
+        """Starts the authorization process for a user"""
+        # TODO: Check if already authorized and confirm to reauth
+        auth_url = ("https://untappd.com/oauth/authenticate/?client_id="
+                    "{!s}&response_type=token&redirect_url={!s}").format(
+                        self.settings["client_id"],
+                        "https://aardwolf.github.io/tokenrevealer.html"
+                    )
+        auth_string = ("Please authenticate with untappd then follow the"
+                       " instructions on [this page]"
+                       "({!s})").format(auth_url)
+        embed = embedme(auth_string, title="Authorization")
+        await self.bot.whisper("", embed=embed)
+
+    @untappd.command(pass_context=True, no_pm=False, name="auth-token")
+    async def auth_token(self, ctx, keyword):
+        """Finishes the authorization process"""
+        if not keyword:
+            await send_cmd_help(ctx)
+        author = ctx.message.author.id
+        if author not in self.settings:
+            self.settings[author] = {}
+        self.settings[author]["token"] = keyword
+        dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.whisper("Token saved, thank you")
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
@@ -643,9 +672,9 @@ def list_size(self, server=None):
     return list_size
 
 
-def embedme(errorStr):
+def embedme(errorStr, title="Error encountered"):
     """Returns an embed object with the error string provided"""
-    embed = discord.Embed(title="Error encountered",
+    embed = discord.Embed(title=title,
                           description=errorStr[:2048])
     return embed
 
