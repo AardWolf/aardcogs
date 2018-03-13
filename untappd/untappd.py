@@ -123,7 +123,7 @@ class Untappd():
                     )
         auth_string = ("Please authenticate with untappd then follow the"
                        " instructions on [this page]"
-                       "({!s})").format(auth_url)
+                       "({!s}) using the proper prefix").format(auth_url)
         embed = embedme(auth_string, title="Authorization")
         await self.bot.whisper("", embed=embed)
 
