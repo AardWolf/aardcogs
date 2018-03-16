@@ -344,13 +344,6 @@ class Untappd():
                     profile = self.settings[guild][user.id]["nick"]
                 except KeyError:
                     profile = user.display_name
-        if not profile:
-            try:
-                profile = self.settings[guild][author.id]["nick"]
-            except KeyError:
-                profile = None
-        if not profile:
-            profile = author.display_name
 
         # The way the API works you can provide a checkin number and limit
         for word in keywords:
@@ -360,6 +353,13 @@ class Untappd():
                 countnum = 1
             elif not profile:
                 profile = word
+        if not profile:
+            try:
+                profile = self.settings[guild][author.id]["nick"]
+            except KeyError:
+                profile = None
+        if not profile:
+            profile = author.display_name
 
         if countnum > 50:
             countnum = 50
@@ -863,7 +863,7 @@ async def checkin_to_embed(self, checkin):
         embed.add_field(name="Venue", value=venueStr)
     ratingStr = ""
     if checkin["rating_score"]:
-        ratingStr += "{!s} ".format(checkin["rating_score"])
+        ratingStr += "{!s} / ".format(checkin["rating_score"])
     ratingStr += "Avg {!s} Caps ({!s})".format(
         round(beer['rating_score'], 2),
         human_number(beer['rating_count'])
