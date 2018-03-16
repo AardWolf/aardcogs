@@ -861,14 +861,14 @@ async def checkin_to_embed(self, checkin):
             checkin["venue"]["venue_id"]
         )
         embed.add_field(name="Venue", value=venueStr)
-    ratingStr = ""
+    titleStr = "Rating"
     if checkin["rating_score"]:
-        ratingStr += "{!s} / ".format(checkin["rating_score"])
-    ratingStr += "Avg {!s} Caps ({!s})".format(
+        titleStr += " - {!s}".format(checkin["rating_score"])
+    ratingStr = "**{!s}** Average ({!s})".format(
         round(beer['rating_score'], 2),
         human_number(beer['rating_count'])
     )
-    embed.add_field(name="Rating", value=ratingStr)
+    embed.add_field(name=titleStr, value=ratingStr)
     embed.add_field(name="Style", value=beer["beer_style"])
     embed.add_field(name="ABV", value=(beer["beer_abv"] or "N/A"))
     embed.add_field(name="IBU", value=(beer["beer_ibu"] or "N/A"))
