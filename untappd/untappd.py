@@ -291,7 +291,7 @@ class Untappd():
         else:
             message = await self.bot.say(resultStr)
         if len(beer_list) > 1:
-            await embed_menu(self, ctx, beer_list, message, 30)
+            await embed_menu(self, ctx, beer_list, message, 30, type="checkin")
         return
 
     @untappd.command(pass_context=True, no_pm=False)
@@ -311,7 +311,7 @@ class Untappd():
 
     @commands.command(pass_context=True, no_pm=False,
                       aliases=["checkin"])
-    async def checkins(self, ctx, *keywords, limit: int=None):
+    async def checkins(self, ctx, *keywords):
         """Returns a list of checkins"""
 
         embed = None
@@ -322,7 +322,7 @@ class Untappd():
         auth_token = None
         checkin_list = []
         resultStr = ""
-        countnum = limit or list_size(self, server=ctx.message.server)
+        countnum = list_size(self, server=ctx.message.server)
         # determine if a profile or number was given
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -357,11 +357,10 @@ class Untappd():
 
         # The way the API works you can provide a checkin number and limit
         for word in keywords:
-            print("Checking " + word)
+            # print("Checking " + word)
             if word.isdigit():
                 startnum = int(word)
                 countnum = 1
-                print("word was a number")
             else:
                 profile = word
 
@@ -530,7 +529,7 @@ async def getCheckins(self, ctx, profile: str=None,
     keys["client_id"] = self.settings["client_id"]
     if auth_token:
         keys["access_token"] = auth_token
-        print("Doing an authorized lookup")
+        # print("Doing an authorized lookup")
     else:
         keys["client_secret"] = self.settings["client_secret"]
     qstr = urllib.parse.urlencode(keys)
@@ -553,23 +552,8 @@ async def getCheckins(self, ctx, profile: str=None,
                                        j["response"]["checkins"]["items"][0])
     elif j["response"]["checkins"]["count"] > 1:
         checkins = j["response"]["checkins"]["items"]
-        checkinStr = ""
-        for num, checkin in zip(range(count), checkins):
-            checkinStr += ("{!s}{!s}. [{!s}](https://untappd.com/b/{!s})"
-                           " ({!s}) by [{!s}](https://untappd.com/w/{!s})"
-                           "{!s}({!s}) - {!s} badges\n").format(
-                        self.emoji[num+1],
-                        checkin["checkin_id"],
-                        checkin["beer"]["beer_name"],
-                        checkin["beer"]["bid"],
-                        checkin["rating_score"] or "N/A",
-                        checkin["brewery"]["brewery_name"],
-                        checkin["brewery"]["brewery_id"],
-                        self.emoji["beers"],
-                        checkin["toasts"]["count"],
-                        checkin["badges"]["count"]
-                    )
-            checkinList.append(checkin)
+        checkinStr = checkins_to_string(self, count, checkins)
+        checkinList = checkins
         embed = discord.Embed(title=profile, description=checkinStr[:2048])
 
     result = dict()
@@ -736,32 +720,12 @@ async def profileLookup(self, profile, limit=5):
 
 def user_to_embed(self, user, limit=5):
     """Takes the user portion of a json response and returns an embed \
-and a beer list"""
+and a checkin list"""
     beerList = []
     if 'checkins' in user:
-        recentStr = ""
-        for num, checkin in zip(range(limit), user['checkins']['items']):
-            checkinStr = ("{!s} {!s}. [{!s}](https://untappd.com/beer/{!s})"
-                          .format(self.emoji[num+1],
-                                  checkin['beer']['bid'],
-                                  checkin['beer']['beer_name'],
-                                  checkin['beer']['bid']))
-            if "rating_score" in checkin:
-                if checkin['rating_score']:
-                    checkinStr += " ({!s})".format(checkin['rating_score'])
-
-            checkinStr += (" by [{!s}](https://untappd.com/brewery/{!s})"
-                           .format(checkin['brewery']['brewery_name'],
-                                   checkin['brewery']['brewery_id']))
-            if (("toasts" in checkin) and
-                    (checkin["toasts"]["count"] > 0)):
-                checkinStr += (" {!s} ({!s})"
-                               .format(self.emoji["beers"],
-                                       checkin["toasts"]["total_count"]))
-            recentStr += checkinStr
-
-            recentStr += "\n"
-            beerList.append(checkin['beer']['bid'])
+        recentStr = checkins_to_string(self, limit,
+                                       user['checkins']['items'])
+        beerList = user['checkins']['items']
     name_str = user['user_name']
     flair_str = ""
     if user['is_supporter']:
@@ -844,6 +808,27 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
                     await self.bot.remove_reaction(message, e, self.bot.user)
         except discord.Forbidden:
             pass
+
+
+def checkins_to_string(self, count: int, checkins: list):
+    """Takes a list of checkins and returns a string"""
+    checkinStr = ""
+    for num, checkin in zip(range(count), checkins):
+        checkinStr += ("{!s}{!s}. [{!s}](https://untappd.com/b/{!s})"
+                       " ({!s}) by [{!s}](https://untappd.com/w/{!s})"
+                       "{!s}({!s}) - {!s} badges\n").format(
+                    self.emoji[num+1],
+                    checkin["checkin_id"],
+                    checkin["beer"]["beer_name"],
+                    checkin["beer"]["bid"],
+                    checkin["rating_score"] or "N/A",
+                    checkin["brewery"]["brewery_name"],
+                    checkin["brewery"]["brewery_id"],
+                    self.emoji["beers"],
+                    checkin["toasts"]["count"],
+                    checkin["badges"]["count"]
+                )
+    return checkinStr
 
 
 async def checkin_to_embed(self, checkin):
