@@ -1,4 +1,5 @@
 import discord
+# import pprint
 from discord.ext import commands
 from cogs.utils import checks
 import aiohttp
@@ -6,9 +7,11 @@ from .utils.dataIO import dataIO
 import os
 import urllib.parse
 from __main__ import send_cmd_help
+from datetime import datetime
 
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
+# Checkin: https://untappd.com/c/<checkin>
 
 
 class Untappd():
@@ -26,19 +29,20 @@ class Untappd():
             self.settings["moderator_emoji"] = ":crown:"
         self.session = aiohttp.ClientSession()
         self.emoji = {
-            1: "1⃣",
-            2: "2⃣",
-            3: "3⃣",
-            4: "4⃣",
-            5: "5⃣",
-            6: "6⃣",
-            7: "7⃣",
-            8: "8⃣",
-            9: "9⃣",
-            10: "🔟",
-            "beers": "🍻",
-            "beer": "🍺"
-            }
+                1: "1⃣",
+                2: "2⃣",
+                3: "3⃣",
+                4: "4⃣",
+                5: "5⃣",
+                6: "6⃣",
+                7: "7⃣",
+                8: "8⃣",
+                9: "9⃣",
+                10: "🔟",
+                "beers": "🍻",
+                "beer": "🍺",
+                "comments": "💬"
+        }
 
     @commands.group(no_pm=False, invoke_without_command=False,
                     pass_context=True)
@@ -94,6 +98,8 @@ class Untappd():
     async def setnick(self, ctx, keywords):
         """Set your untappd user name to use for future commands"""
         # TODO: Replace future commands with the commands
+        if not keywords:
+            await send_cmd_help(ctx)
         if (ctx.message.server):
             server = ctx.message.server.id
             if server not in self.settings:
@@ -109,6 +115,33 @@ class Untappd():
             await self.bot.say("I was unable to set that for this server")
             print("Channel type: {!s}".format(ctx.message.channel.type))
             print("Guild: {!s}".format(ctx.message.server))
+
+    @untappd.command(pass_context=True, no_pm=False)
+    async def authme(self, ctx):
+        """Starts the authorization process for a user"""
+        # TODO: Check if already authorized and confirm to reauth
+        auth_url = ("https://untappd.com/oauth/authenticate/?client_id="
+                    "{!s}&response_type=token&redirect_url={!s}").format(
+                        self.settings["client_id"],
+                        "https://aardwolf.github.io/tokenrevealer.html"
+                    )
+        auth_string = ("Please authenticate with untappd then follow the"
+                       " instructions on [this page]"
+                       "({!s}) using the proper prefix").format(auth_url)
+        embed = embedme(auth_string, title="Authorization")
+        await self.bot.whisper("", embed=embed)
+
+    @untappd.command(pass_context=True, no_pm=False, name="auth-token")
+    async def auth_token(self, ctx, keyword):
+        """Finishes the authorization process"""
+        if not keyword:
+            await send_cmd_help(ctx)
+        author = ctx.message.author.id
+        if author not in self.settings:
+            self.settings[author] = {}
+        self.settings[author]["token"] = keyword
+        dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.whisper("Token saved, thank you")
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
@@ -172,6 +205,7 @@ class Untappd():
         resultStr = ""
         author = ctx.message.author
         guild = str(ctx.message.server.id)
+        auth_token = ""
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -183,6 +217,7 @@ class Untappd():
             # If user has set a nickname, use that - but only if it's not a PM
             if ctx.message.server:
                 user = ctx.message.mentions[0]
+                print("looking up {!s}".format(user.id))
                 try:
                     profile = self.settings[guild][user.id]["nick"]
                 except KeyError:
@@ -192,16 +227,20 @@ class Untappd():
             try:
                 profile = self.settings[guild][author.id]["nick"]
             except KeyError:
-                profile = None
-        if not profile:
-            profile = author.display_name
+                profile = author.display_name
+
+        if author.id in self.settings:
+            if "token" in self.settings[author.id]:
+                auth_token = self.settings[author.id]["token"]
         await self.bot.send_typing(ctx.message.channel)
-        results = await profileToBeer(self, profile)
+        results = await getCheckins(self, ctx, profile=profile,
+                                    count=1, auth_token=auth_token)
         if (isinstance(results, dict)) and ("embed" in results):
             embed = results["embed"]
+            await self.bot.say(resultStr, embed=embed)
         else:
-            embed = results
-        await self.bot.say(resultStr, embed=embed)
+            await self.bot.say(results)
+        return
 
     @commands.command(pass_context=True, no_pm=False)
     async def profile(self, ctx, profile: str=None):
@@ -252,7 +291,7 @@ class Untappd():
         else:
             message = await self.bot.say(resultStr)
         if len(beer_list) > 1:
-            await embed_menu(self, ctx, beer_list, message, 30)
+            await embed_menu(self, ctx, beer_list, message, 30, type="checkin")
         return
 
     @untappd.command(pass_context=True, no_pm=False)
@@ -269,6 +308,90 @@ class Untappd():
         else:
             await self.bot.say("I am expecting two words, the id and " +
                                "the secret only")
+
+    @commands.command(pass_context=True, no_pm=False,
+                      aliases=["checkin"])
+    async def checkins(self, ctx, *keywords):
+        """Returns a list of checkins"""
+
+        embed = None
+        profile = ""
+        startnum = 0
+        author = ctx.message.author
+        guild = str(ctx.message.server.id)
+        auth_token = None
+        checkin_list = []
+        resultStr = ""
+        countnum = list_size(self, server=ctx.message.server)
+        # determine if a profile or number was given
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information " +
+                               "and should use the `untappd_apikey` command")
+            return
+
+        try:
+            auth_token = self.settings[author.id]["token"]
+        except KeyError:
+            await self.bot.say(("You have not authenticated yet, use "
+                                "`untappd authme` first"))
+            return
+
+        # If a keyword was provided and it's all digits then look up that one
+        # Looks like there is no way to look up by id alone
+
+        if ctx.message.mentions:
+            # If user has set a nickname, use that - but only if it's not a PM
+            if ctx.message.server:
+                user = ctx.message.mentions[0]
+                try:
+                    profile = self.settings[guild][user.id]["nick"]
+                except KeyError:
+                    profile = user.display_name
+        if not profile:
+            try:
+                profile = self.settings[guild][author.id]["nick"]
+            except KeyError:
+                profile = None
+        if not profile:
+            profile = author.display_name
+
+        # The way the API works you can provide a checkin number and limit
+        for word in keywords:
+            # print("Checking " + word)
+            if word.isdigit():
+                startnum = int(word)
+                countnum = 1
+            elif not profile:
+                profile = word
+
+        if countnum > 50:
+            countnum = 50
+        if countnum < 1:
+            countnum = 1
+        # print(dir(ctx.message.content))
+        # print(dir(ctx.command))
+        # print("{!s}".format(ctx.command.invoke))
+        # if ctx.command.name == "lastbeer":
+        #     countnum = 1
+
+        results = await getCheckins(self, ctx, profile=profile,
+                                    start=startnum, count=countnum,
+                                    auth_token=auth_token)
+        if isinstance(results, dict):
+            if "embed" in results:
+                embed = results["embed"]
+            if "list" in results:
+                checkin_list = results["list"]
+        else:
+            resultStr = results
+        if embed:
+            message = await self.bot.say(resultStr, embed=embed)
+        else:
+            message = await self.bot.say(resultStr)
+        if len(checkin_list) > 1:
+            await embed_menu(self, ctx, checkin_list, message, 30,
+                             type="checkin")
+        return
 
 
 def check_folders():
@@ -316,12 +439,18 @@ def setup(bot):
     bot.add_cog(Untappd(bot))
 
 
-async def lookupBeer(self, beerid, rating=None, list_size=5):
-    """Look up a beer by id"""
+async def get_beer_by_id(self, beerid):
+    """Use the untappd API to return a beer dict for a beer id"""
 
     api_key = "client_id=" + self.settings["client_id"] + "&client_secret="
     api_key += self.settings["client_secret"]
-    url = "https://api.untappd.com/v4/beer/info/" + str(beerid) + "?" + api_key
+    keys = dict()
+    keys["client_id"] = self.settings["client_id"]
+    keys["client_secret"] = self.settings["client_secret"]
+    qstr = urllib.parse.urlencode(keys)
+    url = "https://api.untappd.com/v4/beer/info/{!s}?{!s}".format(
+        beerid, qstr
+    )
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
@@ -329,48 +458,114 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
             return embedme("Query failed with code " + str(resp.status))
 
         if j['meta']['code'] == 200:
-            beer = j['response']['beer']
-            beer_url = "https://untappd.com/b/{}/{!s}".format(
-                beer['beer_slug'],
-                beer['bid'])
-            brewery_url = "https://untappd.com/w/{!s}/{!s}".format(
-                beer['brewery']['brewery_slug'],
-                beer['brewery']['brewery_id'])
-            beer_title = beer['beer_name']
-            embed = discord.Embed(title=beer_title,
-                                  description=beer['beer_description'][:2048],
-                                  url=beer_url)
-            embed.set_author(name=beer['brewery']['brewery_name'],
-                             url=brewery_url,
-                             icon_url=beer['brewery']['brewery_label'])
-            embed.add_field(name="Style", value=beer['beer_style'],
-                            inline=True)
-            rating_str = "{!s} Caps ({})".format(
-                round(beer['rating_score'], 2),
-                human_number(beer['rating_count']))
-            embed.add_field(name="Rating", value=rating_str, inline=True)
-            embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
-            embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
-            if rating:
-                embed.add_field(name="Checkin Rating",
-                                value=str(rating),
-                                inline=True)
-            embed.set_thumbnail(url=beer['beer_label'])
+            return j['response']['beer']
 
-            if "collaborations_with" in j['response']['beer']:
-                collabStr = ""
-                collabs = j['response']['beer']['collaborations_with']['items']
-                for collab in collabs:
-                    collabStr += "[" + collab['brewery']['brewery_name']
-                    collabStr += "](https://untappd.com/brewery/"
-                    collabStr += str(collab['brewery']['brewery_id']) + ")\n"
-                embed.add_field(name="Collaboration with", value=collabStr)
-            return embed
 
-    return embedme("A problem")
+async def lookupBeer(self, beerid, rating=None, list_size=5):
+    """Look up a beer by id"""
+
+    beer = await get_beer_by_id(self, beerid)
+    if not beer:
+        return embedme("Problem looking up a beer by id")
+    beer_url = "https://untappd.com/b/{}/{!s}".format(
+        beer['beer_slug'],
+        beer['bid'])
+    brewery_url = "https://untappd.com/w/{!s}/{!s}".format(
+        beer['brewery']['brewery_slug'],
+        beer['brewery']['brewery_id'])
+    beer_title = beer['beer_name']
+    embed = discord.Embed(title=beer_title,
+                          description=beer['beer_description'][:2048],
+                          url=beer_url)
+    embed.set_author(name=beer['brewery']['brewery_name'],
+                     url=brewery_url,
+                     icon_url=beer['brewery']['brewery_label'])
+    embed.add_field(name="Style", value=beer['beer_style'],
+                    inline=True)
+    rating_str = "{!s} Caps ({})".format(
+        round(beer['rating_score'], 2),
+        human_number(beer['rating_count']))
+    embed.add_field(name="Rating", value=rating_str, inline=True)
+    embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
+    embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
+    if rating:
+        embed.add_field(name="Checkin Rating",
+                        value=str(rating),
+                        inline=True)
+    embed.set_thumbnail(url=beer['beer_label'])
+
+    if "collaborations_with" in beer:
+        collabStr = ""
+        collabs = beer['collaborations_with']['items']
+        for collab in collabs:
+            collabStr += "[" + collab['brewery']['brewery_name']
+            collabStr += "](https://untappd.com/brewery/"
+            collabStr += str(collab['brewery']['brewery_id']) + ")\n"
+        embed.add_field(name="Collaboration with", value=collabStr)
+    return embed
+
+
+async def getCheckins(self, ctx, profile: str=None,
+                      start: int=None, count: int=0,
+                      auth_token: str=None):
+    """Given some information get checkins of a user"""
+    # Sanitize our inputs
+    guild = ctx.message.server.id
+    embed = None
+    checkinList = []
+    if not profile:
+        return "No profile was provided or calculated"
+    if not count:
+        try:
+            count = self.settings[guild]["max_items_in_list"]
+        except KeyError:
+            count = self.settings["max_items_in_list"]
+
+    keys = dict()
+    if count:
+        keys["limit"] = count
+    if start:
+        keys["max_id"] = start
+    keys["client_id"] = self.settings["client_id"]
+    if auth_token:
+        keys["access_token"] = auth_token
+        # print("Doing an authorized lookup")
+    else:
+        keys["client_secret"] = self.settings["client_secret"]
+    qstr = urllib.parse.urlencode(keys)
+    url = ("https://api.untappd.com/v4/user/checkins/{!s}?{!s}").format(
+        profile, qstr
+    )
+    async with self.session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        else:
+            print("Lookup failed for url: "+url)
+            return ("Lookup failed with {!s}").format(resp.status)
+
+    if j["meta"]["code"] != 200:
+        print("Lookup failed for url: "+url)
+        return ("Lookup failed with {!s}").format(j["meta"]["code"])
+
+    if j["response"]["checkins"]["count"] == 1:
+        embed = await checkin_to_embed(self,
+                                       j["response"]["checkins"]["items"][0])
+    elif j["response"]["checkins"]["count"] > 1:
+        checkins = j["response"]["checkins"]["items"]
+        checkinStr = checkins_to_string(self, count, checkins)
+        checkinList = checkins
+        embed = discord.Embed(title=profile, description=checkinStr[:2048])
+
+    result = dict()
+    result["embed"] = embed
+    if checkinList:
+        result["list"] = checkinList
+    return result
 
 
 async def searchBeer(self, query, limit=None, rating=None):
+    """Given a query string and some other
+    information returns an embed of results"""
     returnStr = ""
     resultStr = ""
     list_limit = limit or list_size(self, None)
@@ -525,32 +720,12 @@ async def profileLookup(self, profile, limit=5):
 
 def user_to_embed(self, user, limit=5):
     """Takes the user portion of a json response and returns an embed \
-and a beer list"""
+and a checkin list"""
     beerList = []
     if 'checkins' in user:
-        recentStr = ""
-        for num, checkin in zip(range(limit), user['checkins']['items']):
-            checkinStr = ("{!s} {!s}. [{!s}](https://untappd.com/beer/{!s})"
-                          .format(self.emoji[num+1],
-                                  checkin['beer']['bid'],
-                                  checkin['beer']['beer_name'],
-                                  checkin['beer']['bid']))
-            if "rating_score" in checkin:
-                if checkin['rating_score']:
-                    checkinStr += " ({!s})".format(checkin['rating_score'])
-
-            checkinStr += (" by [{!s}](https://untappd.com/brewery/{!s})"
-                           .format(checkin['brewery']['brewery_name'],
-                                   checkin['brewery']['brewery_id']))
-            if (("toasts" in checkin) and
-                    (checkin["toasts"]["count"] > 0)):
-                checkinStr += (" {!s} ({!s})"
-                               .format(self.emoji["beers"],
-                                       checkin["toasts"]["total_count"]))
-            recentStr += checkinStr
-
-            recentStr += "\n"
-            beerList.append(checkin['beer']['bid'])
+        recentStr = checkins_to_string(self, limit,
+                                       user['checkins']['items'])
+        beerList = user['checkins']['items']
     name_str = user['user_name']
     flair_str = ""
     if user['is_supporter']:
@@ -590,9 +765,8 @@ and a beer list"""
     return (embed, beerList)
 
 
-async def embed_menu(self, ctx, beer_list: list,
-                     message,
-                     timeout: int=30):
+async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
+                     type: str="beer"):
     """Says the message with the embed and adds menu for reactions"""
     emoji = []
     limit = list_size(self, ctx.message.server)
@@ -621,7 +795,10 @@ async def embed_menu(self, ctx, beer_list: list,
     react = reacts[react.reaction.emoji]
     react -= 1
     if len(beer_list) > react:
-        new_embed = await lookupBeer(self, beer_list[react], list_size=1)
+        if type == "beer":
+            new_embed = await lookupBeer(self, beer_list[react], list_size=1)
+        elif type == "checkin":
+            new_embed = await checkin_to_embed(self, beer_list[react])
         await self.bot.say(embed=new_embed)
         try:
             try:
@@ -633,19 +810,118 @@ async def embed_menu(self, ctx, beer_list: list,
             pass
 
 
+def checkins_to_string(self, count: int, checkins: list):
+    """Takes a list of checkins and returns a string"""
+    checkinStr = ""
+    for num, checkin in zip(range(count), checkins):
+        checkinStr += ("{!s}{!s}. [{!s}](https://untappd.com/b/{!s})"
+                       " ({!s}) by [{!s}](https://untappd.com/w/{!s})"
+                       "{!s}({!s}) - {!s} badges\n").format(
+                    self.emoji[num+1],
+                    checkin["checkin_id"],
+                    checkin["beer"]["beer_name"],
+                    checkin["beer"]["bid"],
+                    checkin["rating_score"] or "N/A",
+                    checkin["brewery"]["brewery_name"],
+                    checkin["brewery"]["brewery_id"],
+                    self.emoji["beers"],
+                    checkin["toasts"]["count"],
+                    checkin["badges"]["count"]
+                )
+    return checkinStr
+
+
+async def checkin_to_embed(self, checkin):
+    """Given a checkin object return an embed of that checkin's information"""
+
+    # Get the base beer information
+    beer = await get_beer_by_id(self, checkin["beer"]["bid"])
+    # titleStr = "Checkin {!s}".format(checkin["checkin_id"])
+    url = ("https://untappd.com/user/{!s}/checkin/{!s}").format(
+        checkin["user"]["user_name"],
+        checkin["checkin_id"]
+        )
+    titleStr = ("{!s} was drinking a {!s} by {!s}").format(
+                   checkin["user"]["first_name"],
+                   checkin["beer"]["beer_name"],
+                   checkin["brewery"]["brewery_name"]
+               )
+    checkinTS = datetime.strptime(checkin["created_at"],
+                                  "%a, %d %b %Y %H:%M:%S %z")
+
+    embed = discord.Embed(title=titleStr,
+                          description=beer["beer_description"][:2048],
+                          url=url, timestamp=checkinTS)
+    if checkin["media"]["count"] >= 1:
+        embed.set_thumbnail(
+            url=checkin["media"]["items"][0]["photo"]["photo_img_md"]
+            )
+    # Add fields of interest
+    if isinstance(checkin["venue"], dict):
+        venueStr = "[{!s}](https://untappd.com/v/{!s})".format(
+            checkin["venue"]["venue_name"],
+            checkin["venue"]["venue_id"]
+        )
+        embed.add_field(name="Venue", value=venueStr)
+    ratingStr = ""
+    if checkin["rating_score"]:
+        ratingStr += "{!s} ".format(checkin["rating_score"])
+    ratingStr += "Avg {!s} Caps ({!s})".format(
+        round(beer['rating_score'], 2),
+        human_number(beer['rating_count'])
+    )
+    embed.add_field(name="Rating", value=ratingStr)
+    embed.add_field(name="Style", value=beer["beer_style"])
+    embed.add_field(name="ABV", value=(beer["beer_abv"] or "N/A"))
+    embed.add_field(name="IBU", value=(beer["beer_ibu"] or "N/A"))
+    checkinStr = "{!s} checkins from {!s} users".format(
+        human_number(beer["stats"]["total_count"]),
+        human_number(beer["stats"]["total_user_count"])
+    )
+    embed.add_field(name="Checkins", value=checkinStr)
+    if "collaborations_with" in beer:
+        collabStr = ""
+        collabs = beer['collaborations_with']['items']
+        for collab in collabs:
+            collabStr += "[" + collab['brewery']['brewery_name']
+            collabStr += "](https://untappd.com/brewery/"
+            collabStr += str(collab['brewery']['brewery_id']) + ")\n"
+        embed.add_field(name="Collaboration with", value=collabStr)
+    if checkin["checkin_comment"]:
+        embed.add_field(name="Comment",
+                        value=checkin["checkin_comment"][:1024])
+    if (checkin["comments"]["count"] + checkin["toasts"]["count"]) > 0:
+        newValue = "{!s}({!s}){!s}({!s})".format(
+                self.emoji["comments"],
+                checkin["comments"]["count"],
+                self.emoji["beers"],
+                checkin["toasts"]["count"]
+        )
+        embed.add_field(name="Flags", value=newValue)
+    if checkin["badges"]["count"] > 0:
+        badgeStr = ""
+        for badge in checkin["badges"]["items"]:
+            badgeStr += "{!s}\n".format(badge["badge_name"])
+        embed.add_field(name="Badges", value=badgeStr[:1024])
+
+    embed.set_footer(text="Checkin {!s}".format(checkin["checkin_id"]))
+    return embed
+
+
 def list_size(self, server=None):
     """Returns a list size if configured for the server or the default size"""
+    size = self.settings["max_items_in_list"]
     if server:
         try:
-            list_size = self.settings[server.id]["max_items_in_list"]
+            size = self.settings[server.id]["max_items_in_list"]
         except KeyError:
-            list_size = self.settings["max_items_in_list"]
-    return list_size
+            size = self.settings["max_items_in_list"]
+    return size
 
 
-def embedme(errorStr):
+def embedme(errorStr, title="Error encountered"):
     """Returns an embed object with the error string provided"""
-    embed = discord.Embed(title="Error encountered",
+    embed = discord.Embed(title=title,
                           description=errorStr[:2048])
     return embed
 
