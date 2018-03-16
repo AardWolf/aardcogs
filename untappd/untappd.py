@@ -329,12 +329,9 @@ class Untappd():
                                "and should use the `untappd_apikey` command")
             return
 
-        try:
-            auth_token = self.settings[author.id]["token"]
-        except KeyError:
-            await self.bot.say(("You have not authenticated yet, use "
-                                "`untappd authme` first"))
-            return
+        if author.id in self.settings:
+            if "token" in self.settings[author.id]:
+                auth_token = self.settings[author.id]["token"]
 
         # If a keyword was provided and it's all digits then look up that one
         # Looks like there is no way to look up by id alone
@@ -536,6 +533,7 @@ async def getCheckins(self, ctx, profile: str=None,
     url = ("https://api.untappd.com/v4/user/checkins/{!s}?{!s}").format(
         profile, qstr
     )
+    print("Looking up: {!s}".format(url))
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
