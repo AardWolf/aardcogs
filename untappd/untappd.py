@@ -217,6 +217,7 @@ class Untappd():
             # If user has set a nickname, use that - but only if it's not a PM
             if ctx.message.server:
                 user = ctx.message.mentions[0]
+                print("looking up {!s}".format(user.id))
                 try:
                     profile = self.settings[guild][user.id]["nick"]
                 except KeyError:
@@ -226,9 +227,8 @@ class Untappd():
             try:
                 profile = self.settings[guild][author.id]["nick"]
             except KeyError:
-                profile = None
-        if not profile:
-            profile = author.display_name
+                profile = author.display_name
+
         if author.id in self.settings:
             if "token" in self.settings[author.id]:
                 auth_token = self.settings[author.id]["token"]
@@ -315,7 +315,7 @@ class Untappd():
         """Returns a list of checkins"""
 
         embed = None
-        profile = ctx.message.author.display_name
+        profile = ""
         startnum = 0
         author = ctx.message.author
         guild = str(ctx.message.server.id)
@@ -361,7 +361,7 @@ class Untappd():
             if word.isdigit():
                 startnum = int(word)
                 countnum = 1
-            else:
+            elif not profile:
                 profile = word
 
         if countnum > 50:
