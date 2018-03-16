@@ -863,7 +863,7 @@ async def checkin_to_embed(self, checkin):
         embed.add_field(name="Venue", value=venueStr)
     ratingStr = ""
     if checkin["rating_score"]:
-        ratingStr += "{!s} ".format(checkin["rating_score"])
+        ratingStr += "{!s} / ".format(checkin["rating_score"])
     ratingStr += "Avg {!s} Caps ({!s})".format(
         round(beer['rating_score'], 2),
         human_number(beer['rating_count'])
