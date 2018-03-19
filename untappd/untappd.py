@@ -327,7 +327,7 @@ class Untappd():
                 auth_token = self.settings[author.id]["token"]
 
         if not auth_token:
-            await self.bot.say(("Unable to toast until you have"
+            await self.bot.say(("Unable to toast until you have "
                                 "authenticated me using `untappd authme`"))
             return
 
