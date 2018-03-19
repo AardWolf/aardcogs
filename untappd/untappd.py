@@ -467,7 +467,7 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     beer_url = "https://untappd.com/b/{}/{!s}".format(
         beer['beer_slug'],
         beer['bid'])
-    brewery_url = "https://untappd.com/w/{!s}/{!s}".format(
+    brewery_url = "https://untappd.com/brewery/{!s}/{!s}".format(
         beer['brewery']['brewery_slug'],
         beer['brewery']['brewery_id'])
     beer_title = beer['beer_name']
@@ -604,8 +604,7 @@ async def searchBeer(self, query, limit=None, rating=None):
                     resultStr += self.emoji[num+1] + " "
                     resultStr += str(beer['beer']['bid']) + ". ["
                     resultStr += beer['beer']['beer_name'] + "]"
-                    resultStr += "(" + "https://untappd.com/b/"
-                    resultStr += beer['beer']['beer_slug'] + "/"
+                    resultStr += "(" + "https://untappd.com/beer/"
                     resultStr += str(beer['beer']['bid']) + ") "
                     brewery = ("by *[{!s}](https://untappd.com/w/"
                                "{!s}/{!s})*").format(
@@ -812,8 +811,8 @@ def checkins_to_string(self, count: int, checkins: list):
     """Takes a list of checkins and returns a string"""
     checkinStr = ""
     for num, checkin in zip(range(count), checkins):
-        checkinStr += ("{!s}{!s}. [{!s}](https://untappd.com/b/{!s})"
-                       " ({!s}) by [{!s}](https://untappd.com/w/{!s})"
+        checkinStr += ("{!s}{!s}. [{!s}](https://untappd.com/beer/{!s})"
+                       " ({!s}) by [{!s}](https://untappd.com/brewery/{!s})"
                        "{!s}({!s}) - {!s} badges\n").format(
                     self.emoji[num+1],
                     checkin["checkin_id"],
@@ -856,7 +855,7 @@ async def checkin_to_embed(self, checkin):
             )
     # Add fields of interest
     if isinstance(checkin["venue"], dict):
-        venueStr = "[{!s}](https://untappd.com/v/{!s})".format(
+        venueStr = "[{!s}](https://untappd.com/venue/{!s})".format(
             checkin["venue"]["venue_name"],
             checkin["venue"]["venue_id"]
         )
