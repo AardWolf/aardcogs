@@ -204,7 +204,10 @@ class Untappd():
         embed = False
         resultStr = ""
         author = ctx.message.author
-        guild = str(ctx.message.server.id)
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
         auth_token = ""
 
         if not check_credentials(self.settings):
@@ -251,7 +254,10 @@ class Untappd():
         beer_list = []
         resultStr = ""
         author = ctx.message.author
-        guild = str(ctx.message.server.id)
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -386,7 +392,10 @@ class Untappd():
         profile = ""
         startnum = 0
         author = ctx.message.author
-        guild = str(ctx.message.server.id)
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
         auth_token = None
         checkin_list = []
         resultStr = ""
@@ -649,7 +658,10 @@ async def getCheckins(self, ctx, profile: str=None,
                       auth_token: str=None):
     """Given some information get checkins of a user"""
     # Sanitize our inputs
-    guild = ctx.message.server.id
+    if ctx.message.server:
+        guild = str(ctx.message.server.id)
+    else:
+        guild = 0
     embed = None
     checkinList = []
     if not profile:
