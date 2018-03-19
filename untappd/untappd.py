@@ -309,8 +309,76 @@ class Untappd():
             await self.bot.say("I am expecting two words, the id and " +
                                "the secret only")
 
-    @commands.command(pass_context=True, no_pm=False,
-                      aliases=["checkin"])
+    @commands.command(pass_context=True, no_pm=False)
+    async def toast(self, ctx, *keywords):
+        """Toasts a checkin by number, if you're friends"""
+
+        author = ctx.message.author
+        auth_token = None
+        checkin = 0
+
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information " +
+                               "and should use the `untappd_apikey` command")
+            return
+
+        if author.id in self.settings:
+            if "token" in self.settings[author.id]:
+                auth_token = self.settings[author.id]["token"]
+
+        if not auth_token:
+            await self.bot.say(("Unable to toast until you have"
+                                "authenticated me using `untappd authme`"))
+            return
+
+        for word in keywords:
+            # print("Checking " + word)
+            if word.isdigit():
+                checkin = int(word)
+
+        if not word:
+            await self.bot.say("A checkin ID number is required")
+            return
+
+        embed = await toastIt(self, checkin=checkin, auth_token=auth_token)
+        if isinstance(embed, str):
+            await self.bot.say(embed)
+        else:
+            await self.bot.say("", embed=embed)
+
+    @commands.command(pass_context=True, no_pm=False)
+    async def checkin(self, ctx, *keywords):
+        """Returns a single checkin by number"""
+
+        author = ctx.message.author
+        auth_token = None
+        checkin = 0
+
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information " +
+                               "and should use the `untappd_apikey` command")
+            return
+
+        if author.id in self.settings:
+            if "token" in self.settings[author.id]:
+                auth_token = self.settings[author.id]["token"]
+
+        for word in keywords:
+            # print("Checking " + word)
+            if word.isdigit():
+                checkin = int(word)
+
+        if not checkin:
+            await self.bot.say("A checkin ID number is required")
+            return
+
+        embed = await getCheckin(self, checkin=checkin, auth_token=auth_token)
+        if isinstance(embed, str):
+            await self.bot.say(embed)
+        else:
+            await self.bot.say("", embed=embed)
+
+    @commands.command(pass_context=True, no_pm=False)
     async def checkins(self, ctx, *keywords):
         """Returns a list of checkins"""
 
@@ -502,6 +570,80 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     return embed
 
 
+async def toastIt(self, checkin: int, auth_token: str=None):
+    """Toast a specific checkin"""
+
+    keys = dict()
+    keys["client_id"] = self.settings["client_id"]
+    keys["access_token"] = auth_token
+
+    qstr = urllib.parse.urlencode(keys)
+    url = ("https://api.untappd.com/v4/checkin/toast/{!s}?{!s}").format(
+        checkin, qstr
+    )
+    print("Using URL: {!s}".format(url))
+
+    async with self.session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        elif resp.status == 500:
+            return ("Toast failed, probably because you haven't authenticated"
+                    " or aren't friends with this person."
+                    " Use `untappd authme` to let the bot act as you.")
+        else:
+            # print("Lookup failed for url: "+url)
+            return ("Toast failed with {!s}").format(resp.status)
+
+    if j["meta"]["code"] != 200:
+        # print("Lookup failed for url: "+url)
+        return ("Toast failed with {!s} - {!s}").format(
+            j["meta"]["code"],
+            j["meta"]["error_detail"])
+
+    if "result" in j["response"]:
+        if j["response"]["result"] == "success":
+            if j["response"]["like_type"] == "toast":
+                return "Toasted!"
+            elif j["response"]["like_type"] == "un-toast":
+                return "Toast rescinded!"
+        else:
+            return "Toast failed for some reason"
+    else:
+        return "I didn't get an error but I didn't get confirmation either"
+
+
+async def getCheckin(self, checkin: int, auth_token: str=None):
+    """Look up a specific checkin"""
+
+    keys = dict()
+    keys["client_id"] = self.settings["client_id"]
+    if auth_token:
+        keys["access_token"] = auth_token
+        # print("Doing an authorized lookup")
+    else:
+        keys["client_secret"] = self.settings["client_secret"]
+    qstr = urllib.parse.urlencode(keys)
+    url = ("https://api.untappd.com/v4/checkin/view/{!s}?{!s}").format(
+        checkin, qstr
+    )
+
+    async with self.session.get(url) as resp:
+        if resp.status == 200:
+            j = await resp.json()
+        else:
+            # print("Lookup failed for url: "+url)
+            return ("Lookup failed with {!s}").format(resp.status)
+
+    if j["meta"]["code"] != 200:
+        # print("Lookup failed for url: "+url)
+        return ("Lookup failed with {!s} - {!s}").format(
+            j["meta"]["code"],
+            j["meta"]["error_detail"])
+
+    user_checkin = j["response"]["checkin"]
+    return await checkin_to_embed(self, user_checkin)
+
+
 async def getCheckins(self, ctx, profile: str=None,
                       start: int=None, count: int=0,
                       auth_token: str=None):
@@ -533,17 +675,20 @@ async def getCheckins(self, ctx, profile: str=None,
     url = ("https://api.untappd.com/v4/user/checkins/{!s}?{!s}").format(
         profile, qstr
     )
-    print("Looking up: {!s}".format(url))
+    # print("Looking up: {!s}".format(url))
     async with self.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
         else:
-            print("Lookup failed for url: "+url)
+            # print("Lookup failed for url: "+url)
             return ("Lookup failed with {!s}").format(resp.status)
 
     if j["meta"]["code"] != 200:
-        print("Lookup failed for url: "+url)
-        return ("Lookup failed with {!s}").format(j["meta"]["code"])
+        # print("Lookup failed for url: "+url)
+        return ("Lookup failed with {!s} - {!s}").format(
+            j["meta"]["code"],
+            j["meta"]["error_detail"]
+            )
 
     if j["response"]["checkins"]["count"] == 1:
         embed = await checkin_to_embed(self,
