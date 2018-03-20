@@ -378,6 +378,7 @@ class Untappd():
             await self.bot.say("A checkin ID number is required")
             return
 
+        await self.bot.send_typing(ctx.message.channel)
         embed = await getCheckin(self, checkin=checkin, auth_token=auth_token)
         if isinstance(embed, str):
             await self.bot.say(embed)
@@ -448,6 +449,7 @@ class Untappd():
         # if ctx.command.name == "lastbeer":
         #     countnum = 1
 
+        await self.bot.send_typing(ctx.message.channel)
         results = await getCheckins(self, ctx, profile=profile,
                                     start=startnum, count=countnum,
                                     auth_token=auth_token)
