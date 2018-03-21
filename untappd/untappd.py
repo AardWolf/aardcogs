@@ -565,8 +565,7 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     beer_url = "https://untappd.com/b/{}/{!s}".format(
         beer['beer_slug'],
         beer['bid'])
-    brewery_url = "https://untappd.com/brewery/{!s}/{!s}".format(
-        beer['brewery']['brewery_slug'],
+    brewery_url = "https://untappd.com/brewery/{!s}".format(
         beer['brewery']['brewery_id'])
     beer_title = beer['beer_name']
     embed = discord.Embed(title=beer_title,
