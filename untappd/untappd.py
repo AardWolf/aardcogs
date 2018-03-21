@@ -129,7 +129,12 @@ class Untappd():
                        " instructions on [this page]"
                        "({!s}) using the proper prefix").format(auth_url)
         embed = embedme(auth_string, title="Authorization")
-        await self.bot.whisper("", embed=embed)
+        disclaimer = ("Following this link and providing the resulting "
+                      "token to the bot will allow it to act as you. "
+                      "Currently that involves some lookups and all toasts."
+                      " Permission can be revoked from the untappd website "
+                      "and with the `unauthme` command")
+        await self.bot.whisper(disclaimer, embed=embed)
 
     @untappd.command(pass_context=True, no_pm=False, name="auth-token")
     async def auth_token(self, ctx, keyword):
@@ -142,6 +147,20 @@ class Untappd():
         self.settings[author]["token"] = keyword
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.whisper("Token saved, thank you")
+
+    @untappd.command(pass_context=True, no_pm=False)
+    async def unauthme(self, ctx):
+        """Removes the authorization token for a user"""
+        # TODO: Check if already authorized and confirm to reauth
+        author = ctx.message.author.id
+        response = ""
+        if author in self.settings:
+            self.settings[author].pop("token", None)
+            response = "Authorization removed"
+        else:
+            response = "It doesn't look like you were authorized before"
+        dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.say(response)
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
@@ -204,7 +223,10 @@ class Untappd():
         embed = False
         resultStr = ""
         author = ctx.message.author
-        guild = str(ctx.message.server.id)
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
         auth_token = ""
 
         if not check_credentials(self.settings):
@@ -251,7 +273,10 @@ class Untappd():
         beer_list = []
         resultStr = ""
         author = ctx.message.author
-        guild = str(ctx.message.server.id)
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -327,7 +352,7 @@ class Untappd():
                 auth_token = self.settings[author.id]["token"]
 
         if not auth_token:
-            await self.bot.say(("Unable to toast until you have"
+            await self.bot.say(("Unable to toast until you have "
                                 "authenticated me using `untappd authme`"))
             return
 
@@ -372,6 +397,7 @@ class Untappd():
             await self.bot.say("A checkin ID number is required")
             return
 
+        await self.bot.send_typing(ctx.message.channel)
         embed = await getCheckin(self, checkin=checkin, auth_token=auth_token)
         if isinstance(embed, str):
             await self.bot.say(embed)
@@ -386,7 +412,10 @@ class Untappd():
         profile = ""
         startnum = 0
         author = ctx.message.author
-        guild = str(ctx.message.server.id)
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
         auth_token = None
         checkin_list = []
         resultStr = ""
@@ -439,6 +468,7 @@ class Untappd():
         # if ctx.command.name == "lastbeer":
         #     countnum = 1
 
+        await self.bot.send_typing(ctx.message.channel)
         results = await getCheckins(self, ctx, profile=profile,
                                     start=startnum, count=countnum,
                                     auth_token=auth_token)
@@ -581,7 +611,7 @@ async def toastIt(self, checkin: int, auth_token: str=None):
     url = ("https://api.untappd.com/v4/checkin/toast/{!s}?{!s}").format(
         checkin, qstr
     )
-    print("Using URL: {!s}".format(url))
+    # print("Using URL: {!s}".format(url))
 
     async with self.session.get(url) as resp:
         if resp.status == 200:
@@ -649,7 +679,10 @@ async def getCheckins(self, ctx, profile: str=None,
                       auth_token: str=None):
     """Given some information get checkins of a user"""
     # Sanitize our inputs
-    guild = ctx.message.server.id
+    if ctx.message.server:
+        guild = str(ctx.message.server.id)
+    else:
+        guild = 0
     embed = None
     checkinList = []
     if not profile:
