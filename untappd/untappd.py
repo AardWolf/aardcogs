@@ -129,7 +129,12 @@ class Untappd():
                        " instructions on [this page]"
                        "({!s}) using the proper prefix").format(auth_url)
         embed = embedme(auth_string, title="Authorization")
-        await self.bot.whisper("", embed=embed)
+        disclaimer = ("Following this link and providing the resulting "
+                      "token to the bot will allow it to act as you. "
+                      "Currently that involves some lookups and all toasts."
+                      " Permission can be revoked from the untappd website "
+                      "and with the `unauthme` command")
+        await self.bot.whisper(disclaimer, embed=embed)
 
     @untappd.command(pass_context=True, no_pm=False, name="auth-token")
     async def auth_token(self, ctx, keyword):
@@ -142,6 +147,20 @@ class Untappd():
         self.settings[author]["token"] = keyword
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.whisper("Token saved, thank you")
+
+    @untappd.command(pass_context=True, no_pm=False)
+    async def unauthme(self, ctx):
+        """Removes the authorization token for a user"""
+        # TODO: Check if already authorized and confirm to reauth
+        author = ctx.message.author.id
+        response = ""
+        if author in self.settings:
+            self.settings[author].pop("token", None)
+            response = "Authorization removed"
+        else:
+            response = "It doesn't look like you were authorized before"
+        dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.say(response)
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
@@ -592,7 +611,7 @@ async def toastIt(self, checkin: int, auth_token: str=None):
     url = ("https://api.untappd.com/v4/checkin/toast/{!s}?{!s}").format(
         checkin, qstr
     )
-    print("Using URL: {!s}".format(url))
+    # print("Using URL: {!s}".format(url))
 
     async with self.session.get(url) as resp:
         if resp.status == 200:
