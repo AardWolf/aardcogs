@@ -550,7 +550,7 @@ async def get_beer_by_id(self, beerid):
         if resp.status == 200:
             j = await resp.json()
         else:
-            return embedme("Query failed with code " + str(resp.status))
+            return "Query failed with code " + str(resp.status)
 
         if j['meta']['code'] == 200:
             return j['response']['beer']
@@ -560,7 +560,7 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     """Look up a beer by id"""
 
     beer = await get_beer_by_id(self, beerid)
-    if not beer:
+    if (not beer or isinstance(beer, str)):
         return embedme("Problem looking up a beer by id")
     beer_url = "https://untappd.com/b/{}/{!s}".format(
         beer['beer_slug'],
