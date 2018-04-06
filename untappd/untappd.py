@@ -8,7 +8,6 @@ import os
 import urllib.parse
 from __main__ import send_cmd_help
 from datetime import datetime
-import json
 
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
