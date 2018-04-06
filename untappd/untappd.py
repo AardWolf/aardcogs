@@ -239,7 +239,7 @@ class Untappd():
             # If user has set a nickname, use that - but only if it's not a PM
             if ctx.message.server:
                 user = ctx.message.mentions[0]
-                print("looking up {!s}".format(user.id))
+                # print("looking up {!s}".format(user.id))
                 try:
                     profile = self.settings[guild][user.id]["nick"]
                 except KeyError:
@@ -487,6 +487,35 @@ class Untappd():
             await embed_menu(self, ctx, checkin_list, message, 30,
                              type="checkin")
         return
+
+    @commands.command(pass_context=True, no_pm=False)
+    async def ifound(self, ctx, bid: int):
+        """Add a found beer to the spreadsheet. Accepts a beer id"""
+
+        author = ctx.message.author
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+            try:
+                profile = self.settings[guild][author.id]["nick"]
+            except KeyError:
+                profile = author.display_name
+        else:
+            profile = author.display_name
+
+        await self.bot.send_typing(ctx.message.channel)
+        url = ("https://script.google.com/macros/s/AKfycbwLJ06a-f_F2egj1oHifV7"
+               "YEQkIEjTNKnQ5f42pgFYMhOE8KvI/exec")
+        url += "?bid={!s}&username={!s}".format(bid, profile)
+        async with self.session.get(url) as resp:
+            if resp.status == 200:
+                j = await resp.json()
+            else:
+                return "Query failed with code " + str(resp.status)
+
+            if j['result'] == "success":
+                await self.bot.say("Beer added!")
+            else:
+                await self.bot.say("Something went wrong adding the beer")
 
 
 def check_folders():
