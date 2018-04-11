@@ -46,6 +46,33 @@ class Untappd():
 
     @commands.group(no_pm=False, invoke_without_command=False,
                     pass_context=True)
+    async def groupdrink(self, ctx):
+        """Settings for a drinking project"""
+        if ctx.invoked_subcommand is None:
+            await send_cmd_help(ctx)
+
+    @groupdrink.command(no_pm=True, pass_context=True)
+    @checks.mod_or_permissions(manage_messages=True)
+    async def sheet_url(self, ctx, url):
+        """The published web app URL that accepts GETs and POSTs"""
+        try:
+            server = ctx.message.server.id
+            if server not in self.settings:
+                self.settings[server] = {}
+            is_pm = False
+        except KeyError:
+            is_pm = True
+
+        if is_pm:
+            await self.bot.say("I cannot set this in PM because it's"
+                               " a per-server value")
+        else:
+            self.settings[server]["project_url"] = url
+            dataIO.save_json("data/untappd/settings.json", self.settings)
+            await self.bot.say("The project endpoint URL has been set")
+
+    @commands.group(no_pm=False, invoke_without_command=False,
+                    pass_context=True)
     async def untappd(self, ctx):
         """Explicit Untappd things"""
         if ctx.invoked_subcommand is None:
@@ -495,6 +522,8 @@ class Untappd():
         author = ctx.message.author
         if ctx.message.server:
             guild = str(ctx.message.server.id)
+            if "project_url" in self.settings[guild]:
+                url = self.settings[guild]["project_url"]
             try:
                 profile = self.settings[guild][author.id]["nick"]
             except KeyError:
@@ -503,8 +532,9 @@ class Untappd():
             profile = author.display_name
 
         await self.bot.send_typing(ctx.message.channel)
-        url = ("https://script.google.com/macros/s/AKfycbwLJ06a-f_F2egj1oHifV7"
-               "YEQkIEjTNKnQ5f42pgFYMhOE8KvI/exec")
+        if not url:
+            await self.bot.say("Project URL not set yet")
+            return
         url += "?bid={!s}&username={!s}".format(bid, profile)
         async with self.session.get(url) as resp:
             if resp.status == 200:
@@ -516,6 +546,132 @@ class Untappd():
                 await self.bot.say("Beer added!")
             else:
                 await self.bot.say("Something went wrong adding the beer")
+
+    @commands.command(pass_context=True, no_pm=False)
+    async def idrank(self, ctx, checkin_id: int=0):
+        """Add a checkin to the spreadsheet. Defaults to last one"""
+
+        author = ctx.message.author
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+            if "project_url" in self.settings[guild]:
+                url = self.settings[guild]["project_url"]
+            try:
+                profile = self.settings[guild][author.id]["nick"]
+            except KeyError:
+                profile = author.display_name
+        else:
+            profile = author.display_name
+
+        if author.id in self.settings:
+            if "token" in self.settings[author.id]:
+                auth_token = self.settings[author.id]["token"]
+
+        await self.bot.send_typing(ctx.message.channel)
+        if not url:
+            await self.bot.say("Project URL not set yet")
+            return
+
+        # Get the information needed for the form, starting with checkin id
+        # checkin id	style	beer id	beer name	avg rating
+        # brewery id	brewery	username	rating	comment
+        if not checkin_id or checkin_id <= 0:
+            checkin_url = (
+                "https://api.untappd.com/v4/user/checkins/{!s}".format(
+                    profile))
+            keys = dict()
+            keys["client_id"] = self.settings["client_id"]
+            if auth_token:
+                keys["access_token"] = auth_token
+                # print("Doing an authorized lookup")
+            else:
+                keys["client_secret"] = self.settings["client_secret"]
+            keys["limit"] = 1
+            qstr = urllib.parse.urlencode(keys)
+            checkin_url += "?{!s}".format(qstr)
+            async with self.session.get(checkin_url) as resp:
+                if resp.status == 200:
+                    j = await resp.json()
+                else:
+                    # print("Lookup failed for url: "+url)
+                    await self.bot.say("Lookup failed with {!s}".format(
+                        resp.status))
+                    return
+
+            if j["meta"]["code"] != 200:
+                # print("Lookup failed for url: "+url)
+                await self.bot.say("Lookup failed with {!s} - {!s}").format(
+                    j["meta"]["code"],
+                    j["meta"]["error_detail"]
+                    )
+                return
+
+            checkin = j["response"]["checkins"]["items"][0]
+        else:
+            # The case where a checkin id was provided
+            keys = dict()
+            keys["client_id"] = self.settings["client_id"]
+            if auth_token:
+                keys["access_token"] = auth_token
+                # print("Doing an authorized lookup")
+            else:
+                keys["client_secret"] = self.settings["client_secret"]
+            qstr = urllib.parse.urlencode(keys)
+            checkin_url = ("https://api.untappd.com/v4/checkin/view/"
+                           "{!s}?{!s}").format(
+                checkin_id, qstr
+            )
+
+            async with self.session.get(checkin_url) as resp:
+                if resp.status == 200:
+                    j = await resp.json()
+                else:
+                    # print("Lookup failed for url: "+url)
+                    await self.bot.say("Lookup failed with {!s}".format(
+                        resp.status))
+                    return
+
+            if j["meta"]["code"] != 200:
+                # print("Lookup failed for url: "+url)
+                await self.bot.say("Lookup failed with {!s} - {!s}").format(
+                    j["meta"]["code"],
+                    j["meta"]["error_detail"])
+                return
+
+            checkin = j["response"]["checkin"]
+
+        checkin_id = checkin["checkin_id"]
+        style = checkin["beer"]["beer_style"]
+        beer_id = checkin["beer"]["bid"]
+        beer_name = checkin["beer"]["beer_name"]
+        brewery_id = checkin["brewery"]["brewery_id"]
+        brewery = checkin["brewery"]["brewery_name"]
+        username = checkin["user"]["user_name"]
+        rating = checkin["rating_score"]
+        comment = checkin["checkin_comment"]
+
+        payload = {
+            "action": "drank",
+            "checkin": checkin_id,
+            "style": style,
+            "bid": beer_id,
+            "beer_name": beer_name,
+            "brewery_id": brewery_id,
+            "brewery": brewery,
+            "username": username,
+            "rating": rating,
+            "comment": comment
+        }
+        async with self.session.post(url, data=payload) as resp:
+            if resp.status == 200:
+                j = await resp.json()
+            else:
+                return "Query failed with code " + str(resp.status)
+
+            if j['result'] == "success":
+                await self.bot.say("Checkin {!s} added!".format(checkin_id))
+            else:
+                await self.bot.say("Something went wrong adding the checkin")
 
 
 def check_folders():
