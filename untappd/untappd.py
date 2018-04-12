@@ -535,7 +535,16 @@ class Untappd():
         if not url:
             await self.bot.say("Project URL not set yet")
             return
-        url += "?bid={!s}&username={!s}".format(bid, profile)
+        beer = await get_beer_by_id(self, bid)
+        keys = {
+            "bid": bid,
+            "username": profile,
+            "beer_name": "{!s} from {!s}".format(
+                beer["beer_name"], beer["brewery"]["brewery_name"]
+                )
+        }
+        qstr = urllib.parse.urlencode(keys)
+        url += "?{!s}".format(qstr)
         async with self.session.get(url) as resp:
             if resp.status == 200:
                 j = await resp.json()
@@ -543,7 +552,7 @@ class Untappd():
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                await self.bot.say("Beer added!")
+                await self.bot.say("{!s} added!".format(keys["beer_name"]))
             else:
                 await self.bot.say("Something went wrong adding the beer")
 
