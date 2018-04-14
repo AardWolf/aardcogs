@@ -44,6 +44,7 @@ class Untappd():
                 "comments": "💬"
         }
 
+    # invaild syntax?
     @commands.group(no_pm=False, invoke_without_command=False,
                     pass_context=True)
     async def groupdrink(self, ctx):
@@ -572,6 +573,7 @@ class Untappd():
         else:
             profile = author.display_name
 
+        auth_token = None
         if author.id in self.settings:
             if "token" in self.settings[author.id]:
                 auth_token = self.settings[author.id]["token"]
