@@ -12,6 +12,7 @@ from datetime import datetime
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
 # Checkin: https://untappd.com/c/<checkin>
+# prefix = ctx.prefix
 
 
 class Untappd():
@@ -71,6 +72,27 @@ class Untappd():
             self.settings[server]["project_url"] = url
             dataIO.save_json("data/untappd/settings.json", self.settings)
             await self.bot.say("The project endpoint URL has been set")
+
+    @groupdrink.command(no_pm=True, pass_context=True)
+    @checks.mod_or_permissions(manage_messages=True)
+    async def finish(self, ctx):
+        """The published web app URL that accepts GETs and POSTs"""
+        try:
+            server = ctx.message.server.id
+            if server not in self.settings:
+                self.settings[server] = {}
+            is_pm = False
+        except KeyError:
+            is_pm = True
+
+        if is_pm:
+            await self.bot.say("I cannot set this in PM because it's"
+                               " a per-server value")
+        else:
+            self.settings[server]["project_url"] = ""
+            dataIO.save_json("data/untappd/settings.json", self.settings)
+            await self.bot.say("The drinking project has been temporarily"
+                               " suspended.")
 
     @commands.group(no_pm=False, invoke_without_command=False,
                     pass_context=True)
@@ -393,7 +415,7 @@ class Untappd():
             await self.bot.say("A checkin ID number is required")
             return
 
-        embed = await toastIt(self, checkin=checkin, auth_token=auth_token)
+        embed = await toastIt(ctx, checkin=checkin, auth_token=auth_token)
         if isinstance(embed, str):
             await self.bot.say(embed)
         else:
@@ -534,7 +556,7 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         if not url:
-            await self.bot.say("Project URL not set yet")
+            await self.bot.say("Looks like there are no projects right now")
             return
         beer = await get_beer_by_id(self, bid)
         keys = {
@@ -580,7 +602,7 @@ class Untappd():
 
         await self.bot.send_typing(ctx.message.channel)
         if not url:
-            await self.bot.say("Project URL not set yet")
+            await self.bot.say("Looks like there are not projects right now")
             return
 
         # Get the information needed for the form, starting with checkin id
@@ -730,6 +752,23 @@ def setup(bot):
     bot.add_cog(Untappd(bot))
 
 
+def getAuth(ctx):
+    """Returns auth dictionary"""
+
+    keys = {}
+    # settings = ctx.bot.cogs['Untappd'].settings
+    settings = ctx.cog.settings
+    print(dir(settings))
+    author = ctx.message.author
+    if author.id in settings:
+        if "token" in settings[author.id]:
+            keys["access_token"] = settings[author.id]["token"]
+
+    if "access_token" not in keys:
+        keys["client_secret"] = settings["client_secret"]
+    return keys
+
+
 async def get_beer_by_id(self, beerid):
     """Use the untappd API to return a beer dict for a beer id"""
 
@@ -795,12 +834,13 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     return embed
 
 
-async def toastIt(self, checkin: int, auth_token: str=None):
+async def toastIt(ctx, checkin: int, auth_token: str=None):
     """Toast a specific checkin"""
 
-    keys = dict()
-    keys["client_id"] = self.settings["client_id"]
-    keys["access_token"] = auth_token
+    me = ctx.cog
+    keys = getAuth(ctx)
+    # keys["client_id"] = self.settings["client_id"]
+    # keys["access_token"] = auth_token
 
     qstr = urllib.parse.urlencode(keys)
     url = ("https://api.untappd.com/v4/checkin/toast/{!s}?{!s}").format(
@@ -808,7 +848,7 @@ async def toastIt(self, checkin: int, auth_token: str=None):
     )
     # print("Using URL: {!s}".format(url))
 
-    async with self.session.get(url) as resp:
+    async with me.session.get(url) as resp:
         if resp.status == 200:
             j = await resp.json()
         elif resp.status == 500:
