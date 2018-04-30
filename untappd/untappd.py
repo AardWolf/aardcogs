@@ -575,7 +575,12 @@ class Untappd():
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                await self.bot.say("{!s} added!".format(keys["beer_name"]))
+                embed = await lookupBeer(self, bid)
+                if not embed:
+                    await self.bot.say("{!s} added!".format(keys["beer_name"]))
+                else:
+                    await self.bot.say("{!s} added!".format(keys["beer_name"]),
+                                       embed=embed)
             else:
                 await self.bot.say("Something went wrong adding the beer")
 
