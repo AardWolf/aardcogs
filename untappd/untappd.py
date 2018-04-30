@@ -707,7 +707,15 @@ class Untappd():
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                await self.bot.say("Checkin {!s} added!".format(checkin_id))
+                embed = await getCheckin(self, checkin=checkin_id,
+                                         auth_token=auth_token)
+                if embed:
+                    await self.bot.say("Checkin {!s} added!"
+                                       .format(checkin_id),
+                                       embed=embed)
+                else:
+                    await self.bot.say("Checkin {!s} added!"
+                                       .format(checkin_id))
             else:
                 await self.bot.say("Something went wrong adding the checkin")
 
