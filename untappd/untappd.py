@@ -15,7 +15,7 @@ from datetime import datetime
 # prefix = ctx.prefix
 
 
-class Untappd():
+class Untappd:
     """Untappd cog that lets the bot look up beer
     information from untappd.com!"""
 
@@ -773,6 +773,7 @@ def getAuth(ctx):
     # settings = ctx.bot.cogs['Untappd'].settings
     settings = ctx.cog.settings
     author = ctx.message.author
+    keys["client_id"] = settings["client_id"]
     if author.id in settings:
         if "token" in settings[author.id]:
             keys["access_token"] = settings[author.id]["token"]
