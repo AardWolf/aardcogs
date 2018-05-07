@@ -237,7 +237,7 @@ class Untappd():
             embed = await lookupBeer(self, keywords, list_size=1)
             # await self.bot.say( embed=embed)
         else:
-            results = await searchBeer(self, keywords, limit=list_limit)
+            results = await searchBeer(ctx, keywords, limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
                 if "beer_list" in results:
@@ -259,7 +259,7 @@ class Untappd():
         embed = False
         resultStr = ""
         await self.bot.send_typing(ctx.message.channel)
-        results = await searchBeer(self, " ".join(keywords), limit=1)
+        results = await searchBeer(ctx, " ".join(keywords), limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
             await self.bot.say(resultStr, embed=embed)
@@ -750,6 +750,7 @@ def check_files():
 
 
 def check_credentials(settings):
+    """Confirms bot owner set credentials"""
     if "client_id" not in settings:
         return False
 
@@ -766,12 +767,11 @@ def setup(bot):
 
 
 def getAuth(ctx):
-    """Returns auth dictionary"""
+    """Returns auth dictionary given a context"""
 
     keys = {}
     # settings = ctx.bot.cogs['Untappd'].settings
     settings = ctx.cog.settings
-    print(dir(settings))
     author = ctx.message.author
     if author.id in settings:
         if "token" in settings[author.id]:
@@ -987,23 +987,21 @@ async def getCheckins(self, ctx, profile: str=None,
     return result
 
 
-async def searchBeer(self, query, limit=None, rating=None):
+async def searchBeer(ctx, query, limit=None, rating=None):
     """Given a query string and some other
     information returns an embed of results"""
     returnStr = ""
     resultStr = ""
-    list_limit = limit or list_size(self, None)
-    qstr = urllib.parse.urlencode({
-        "q": query,
-        "limit": list_limit,
-        "client_id": self.settings["client_id"],
-        "client_secret": self.settings["client_secret"]
-        })
+    list_limit = limit or list_size(ctx.cog, None)
+    keys = getAuth(ctx)
+    keys["q"] = query
+    keys["limit"] = limit
+    qstr = urllib.parse.urlencode(keys)
 
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
 #    print(url)
     try:
-        async with self.session.get(url) as resp:
+        async with ctx.cog.session.get(url) as resp:
             if resp.status == 200:
                 j = await resp.json()
             else:
@@ -1020,14 +1018,14 @@ async def searchBeer(self, query, limit=None, rating=None):
             returnStr += " found "
             if j['response']['beers']['count'] == 1:
                 return await lookupBeer(
-                    self, j['response']['beers']['items'][0]['beer']['bid'],
+                    ctx.cog, j['response']['beers']['items'][0]['beer']['bid'],
                     list_size=limit)
             elif j['response']['beers']['count'] > 1:
                 returnStr += str(j['response']['beers']['count']) + " beers:\n"
                 beers = j['response']['beers']['items']
                 for num, beer in zip(range(list_limit),
                                      beers):
-                    resultStr += self.emoji[num+1] + " "
+                    resultStr += ctx.cog.emoji[num+1] + " "
                     resultStr += str(beer['beer']['bid']) + ". ["
                     resultStr += beer['beer']['beer_name'] + "]"
                     resultStr += "(" + "https://untappd.com/beer/"
@@ -1037,7 +1035,12 @@ async def searchBeer(self, query, limit=None, rating=None):
                                 beer['brewery']['brewery_name'],
                                 beer['brewery']['brewery_slug'],
                                 beer['brewery']['brewery_id'])
-                    resultStr += brewery + "\n"
+                    resultStr += brewery
+                    if beer['beer']['auth_rating']:
+                        resultStr += " ({!s})".format(
+                            beer['beer']['auth_rating']
+                        )
+                    resultStr += "\n"
                     beer_list.append(beer['beer']['bid'])
                     if firstnum == 1:
                         firstnum = beer['beer']['bid']
