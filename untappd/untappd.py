@@ -1041,6 +1041,8 @@ async def searchBeer(ctx, query, limit=None, rating=None):
                         resultStr += " ({!s})".format(
                             beer['beer']['auth_rating']
                         )
+                    elif beer['have_had']:
+                        resultStr += " (\*)"
                     resultStr += "\n"
                     beer_list.append(beer['beer']['bid'])
                     if firstnum == 1:
