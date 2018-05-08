@@ -277,7 +277,6 @@ class Untappd:
             guild = str(ctx.message.server.id)
         else:
             guild = 0
-        auth_token = ""
 
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information " +
@@ -301,12 +300,8 @@ class Untappd:
             except KeyError:
                 profile = author.display_name
 
-        if author.id in self.settings:
-            if "token" in self.settings[author.id]:
-                auth_token = self.settings[author.id]["token"]
         await self.bot.send_typing(ctx.message.channel)
-        results = await getCheckins(self, ctx, profile=profile,
-                                    count=1, auth_token=auth_token)
+        results = await getCheckins(self, ctx, profile=profile, count=1)
         if (isinstance(results, dict)) and ("embed" in results):
             embed = results["embed"]
             await self.bot.say(resultStr, embed=embed)
@@ -466,7 +461,6 @@ class Untappd:
             guild = str(ctx.message.server.id)
         else:
             guild = 0
-        auth_token = None
         checkin_list = []
         resultStr = ""
         countnum = list_size(self, server=ctx.message.server)
@@ -475,10 +469,6 @@ class Untappd:
             await self.bot.say("The owner has not set the API information " +
                                "and should use the `untappd_apikey` command")
             return
-
-        if author.id in self.settings:
-            if "token" in self.settings[author.id]:
-                auth_token = self.settings[author.id]["token"]
 
         # If a keyword was provided and it's all digits then look up that one
         # Looks like there is no way to look up by id alone
@@ -520,8 +510,7 @@ class Untappd:
 
         await self.bot.send_typing(ctx.message.channel)
         results = await getCheckins(self, ctx, profile=profile,
-                                    start=startnum, count=countnum,
-                                    auth_token=auth_token)
+                                    start=startnum, count=countnum)
         if isinstance(results, dict):
             if "embed" in results:
                 embed = results["embed"]
@@ -924,8 +913,7 @@ async def getCheckin(self, checkin: int, auth_token: str=None):
 
 
 async def getCheckins(self, ctx, profile: str=None,
-                      start: int=None, count: int=0,
-                      auth_token: str=None):
+                      start: int=None, count: int=0):
     """Given some information get checkins of a user"""
     # Sanitize our inputs
     if ctx.message.server:
@@ -942,17 +930,12 @@ async def getCheckins(self, ctx, profile: str=None,
         except KeyError:
             count = self.settings["max_items_in_list"]
 
-    keys = dict()
+    keys = getAuth(ctx)
     if count:
         keys["limit"] = count
     if start:
         keys["max_id"] = start
     keys["client_id"] = self.settings["client_id"]
-    if auth_token:
-        keys["access_token"] = auth_token
-        # print("Doing an authorized lookup")
-    else:
-        keys["client_secret"] = self.settings["client_secret"]
     qstr = urllib.parse.urlencode(keys)
     url = ("https://api.untappd.com/v4/user/checkins/{!s}?{!s}").format(
         profile, qstr
@@ -1241,13 +1224,15 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
 
 def checkins_to_string(self, count: int, checkins: list):
     """Takes a list of checkins and returns a string"""
-    checkinStr = ""
+    checkinStr = "checkin - bid - beer (caps) - brewery - badges\n"
     for num, checkin in zip(range(count), checkins):
-        checkinStr += ("{!s}{!s}. [{!s}](https://untappd.com/beer/{!s})"
-                       " ({!s}) by [{!s}](https://untappd.com/brewery/{!s})"
-                       "{!s}({!s}) - {!s} badges\n").format(
+        checkinStr += ("{!s}{!s} - {!s} - "
+                       "[{!s}](https://untappd.com/beer/{!s})"
+                       " ({!s}) - [{!s}](https://untappd.com/brewery/{!s})"
+                       " - {!s}\n").format(
                     self.emoji[num+1],
                     checkin["checkin_id"],
+                    checkin["beer"]["bid"],
                     checkin["beer"]["beer_name"],
                     checkin["beer"]["bid"],
                     checkin["rating_score"] or "N/A",
