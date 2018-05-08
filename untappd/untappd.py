@@ -1239,7 +1239,6 @@ def checkins_to_string(self, count: int, checkins: list):
                     checkin["brewery"]["brewery_name"],
                     checkin["brewery"]["brewery_id"],
                     self.emoji["beers"],
-                    checkin["toasts"]["count"],
                     checkin["badges"]["count"]
                 )
     return checkinStr
