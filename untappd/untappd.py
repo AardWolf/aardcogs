@@ -845,7 +845,8 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     embed.add_field(name=stats_title, value=stats_str, inline=True)
     last_seen = "Never"
     if beer["checkins"]["count"]:
-        last_seen = time_ago(beer["checkins"]["items"][0]["created_at"])
+        last_seen = time_ago(beer["checkins"]["items"][0]["created_at"],
+                             long=True)
     embed.add_field(name="Last Seen", value=last_seen, inline=True)
 
     footer_str = "Beer {!s} ".format(beerid)
@@ -1390,7 +1391,7 @@ def human_number(number):
         return str(number)
 
 
-def time_ago(time_str):
+def time_ago(time_str, long=False):
     """Turns a time string into a string of how long ago a thing was"""
 
     return_str = "unknown ago"
@@ -1402,23 +1403,37 @@ def time_ago(time_str):
     (months, days) = divmod(days, 30)
     (hours, secs) = divmod(timediff.seconds, 3600)
     (minutes, secs) = divmod(secs, 60)
-    if years:
-        return_str = "{!s} year{}, {!s} month{} ago".format(
-            years, add_s(years), months, add_s(months))
-    elif months:
-        return_str = "{!s} month{}, {!s} day{} ago".format(
-            months, add_s(months), days, add_s(days))
-    elif days:
-        return_str = "{!s} day{}, {!s} hour{} ago".format(
-            days, add_s(days), hours, add_s(hours))
-    elif hours:
-        return_str = "{!s} hour{}, {!s} minute{} ago".format(
-            hours, add_s(hours), minutes, add_s(minutes))
-    elif minutes:
-        return_str = "{!s} minute{}, {!s} second{} ago".format(
-            minutes, add_s(minutes), secs, add_s(secs))
-    elif secs:
-        return_str = "less than a minute ago"
+    if long:
+        if years:
+            return_str = "{!s} year{}, {!s} month{} ago".format(
+                years, add_s(years), months, add_s(months))
+        elif months:
+            return_str = "{!s} month{}, {!s} day{} ago".format(
+                months, add_s(months), days, add_s(days))
+        elif days:
+            return_str = "{!s} day{}, {!s} hour{} ago".format(
+                days, add_s(days), hours, add_s(hours))
+        elif hours:
+            return_str = "{!s} hour{}, {!s} minute{} ago".format(
+                hours, add_s(hours), minutes, add_s(minutes))
+        elif minutes:
+            return_str = "{!s} minute{}, {!s} second{} ago".format(
+                minutes, add_s(minutes), secs, add_s(secs))
+        elif secs:
+            return_str = "less than a minute ago"
+    else:
+        if years:
+            return_str = "{!s}y{!s}m ago".format(years, months)
+        elif months:
+            return_str = "{!s}m{!s}d ago".format(months, days)
+        elif days:
+            return_str = "{!s}d{!s}h ago".format(days, hours)
+        elif hours:
+            return_str = "{!s}h{!s}m ago".format(hours, minutes)
+        elif minutes:
+            return_str = "{!s}m{!s}s ago".format(minutes, secs)
+        elif secs:
+            return_str = "now"
 
     return return_str
 
