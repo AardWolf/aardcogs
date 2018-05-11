@@ -845,7 +845,8 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     embed.add_field(name=stats_title, value=stats_str, inline=True)
     last_seen = "Never"
     if beer["checkins"]["count"]:
-        last_seen = time_ago(beer["checkins"]["items"][0]["created_at"])
+        last_seen = time_ago(beer["checkins"]["items"][0]["created_at"],
+                             long=True)
     embed.add_field(name="Last Seen", value=last_seen, inline=True)
 
     footer_str = "Beer {!s} ".format(beerid)
