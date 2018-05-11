@@ -44,6 +44,7 @@ class Untappd:
                 "beer": "🍺",
                 "comments": "💬"
         }
+        self.channels = {}
 
     # invaild syntax?
     @commands.group(no_pm=False, invoke_without_command=False,
@@ -163,8 +164,8 @@ class Untappd:
             dataIO.save_json("data/untappd/settings.json", self.settings)
         else:
             await self.bot.say("I was unable to set that for this server")
-            print("Channel type: {!s}".format(ctx.message.channel.type))
-            print("Guild: {!s}".format(ctx.message.server))
+            # print("Channel type: {!s}".format(ctx.message.channel.type))
+            # print("Guild: {!s}".format(ctx.message.server))
 
     @untappd.command(pass_context=True, no_pm=False)
     async def authme(self, ctx):
@@ -406,8 +407,16 @@ class Untappd:
             if word.isdigit():
                 checkin = int(word)
 
-        if not word:
-            await self.bot.say("A checkin ID number is required")
+        if not checkin:
+            channel = ctx.message.channel.id
+            if channel in self.channels:
+                if self.channels[channel]:
+                    checkin = self.channels[channel]
+
+        if not checkin:
+            await self.bot.say("I haven't seen a checkin for this channel "
+                               "since my last start. You'll have to tell me "
+                               "which to toast.")
             return
 
         embed = await toastIt(ctx, checkin=checkin, auth_token=auth_token)
@@ -874,6 +883,9 @@ async def toastIt(ctx, checkin: int, auth_token: str=None):
     keys = getAuth(ctx)
     # keys["client_id"] = self.settings["client_id"]
     # keys["access_token"] = auth_token
+    if "access_token" not in keys:
+        return("You have not authorized the bot to act as you, use"
+               "`untappd authme` to start the process")
 
     qstr = urllib.parse.urlencode(keys)
     url = ("https://api.untappd.com/v4/checkin/toast/{!s}?{!s}").format(
@@ -885,11 +897,10 @@ async def toastIt(ctx, checkin: int, auth_token: str=None):
         if resp.status == 200:
             j = await resp.json()
         elif resp.status == 500:
-            return ("Toast failed, probably because you haven't authenticated"
-                    " or aren't friends with this person."
-                    " Use `untappd authme` to let the bot act as you.")
+            return ("Toast failed, probably because you "
+                    "aren't friends with this person.")
         else:
-            # print("Lookup failed for url: "+url)
+            print("Lookup failed for url: "+url)
             return ("Toast failed with {!s}").format(resp.status)
 
     if j["meta"]["code"] != 200:
@@ -901,9 +912,9 @@ async def toastIt(ctx, checkin: int, auth_token: str=None):
     if "result" in j["response"]:
         if j["response"]["result"] == "success":
             if j["response"]["like_type"] == "toast":
-                return "Toasted!"
+                return "Toasted {!s}!".format(checkin)
             elif j["response"]["like_type"] == "un-toast":
-                return "Toast rescinded!"
+                return "Toast rescinded from {!s}!".format(checkin)
         else:
             return "Toast failed for some reason"
     else:
@@ -1357,6 +1368,9 @@ async def checkin_to_embed(self, ctx, checkin):
     embed.set_footer(text="Checkin {!s} / Beer {!s}"
                      .format(checkin["checkin_id"],
                              checkin["beer"]["bid"]))
+    channel = ctx.message.channel.id
+    self.channels[channel] = checkin["checkin_id"]
+
     return embed
 
 
