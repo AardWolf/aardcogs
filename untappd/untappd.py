@@ -910,9 +910,9 @@ async def toastIt(ctx, checkin: int, auth_token: str=None):
     if "result" in j["response"]:
         if j["response"]["result"] == "success":
             if j["response"]["like_type"] == "toast":
-                return "Toasted!"
+                return "Toasted {!s}!".format(checkin)
             elif j["response"]["like_type"] == "un-toast":
-                return "Toast rescinded!"
+                return "Toast rescinded from {!s}!".format(checkin)
         else:
             return "Toast failed for some reason"
     else:
