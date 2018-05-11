@@ -7,7 +7,7 @@ from .utils.dataIO import dataIO
 import os
 import urllib.parse
 from __main__ import send_cmd_help
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
@@ -234,7 +234,7 @@ class Untappd:
 
         await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
-            embed = await lookupBeer(self, keywords, list_size=1)
+            embed = await lookupBeer(self, ctx, keywords, list_size=1)
             # await self.bot.say( embed=embed)
         else:
             results = await searchBeer(ctx, keywords, limit=list_limit)
@@ -443,7 +443,8 @@ class Untappd:
             return
 
         await self.bot.send_typing(ctx.message.channel)
-        embed = await getCheckin(self, checkin=checkin, auth_token=auth_token)
+        embed = await getCheckin(self, ctx, checkin=checkin,
+                                 auth_token=auth_token)
         if isinstance(embed, str):
             await self.bot.say(embed)
         else:
@@ -547,7 +548,7 @@ class Untappd:
         if not url:
             await self.bot.say("Looks like there are no projects right now")
             return
-        beer = await get_beer_by_id(self, bid)
+        beer = await get_beer_by_id(self, ctx, bid)
         keys = {
             "bid": bid,
             "username": profile,
@@ -564,7 +565,7 @@ class Untappd:
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                embed = await lookupBeer(self, bid)
+                embed = await lookupBeer(self, ctx, bid)
                 if not embed:
                     await self.bot.say("{!s} added!".format(keys["beer_name"]))
                 else:
@@ -696,7 +697,8 @@ class Untappd:
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                embed = await getCheckin(self, checkin=checkin_id,
+                embed = await getCheckin(self, ctx,
+                                         checkin=checkin_id,
                                          auth_token=auth_token)
                 if embed:
                     await self.bot.say("Checkin {!s} added!"
@@ -772,14 +774,10 @@ def getAuth(ctx):
     return keys
 
 
-async def get_beer_by_id(self, beerid):
+async def get_beer_by_id(self, ctx, beerid):
     """Use the untappd API to return a beer dict for a beer id"""
 
-    api_key = "client_id=" + self.settings["client_id"] + "&client_secret="
-    api_key += self.settings["client_secret"]
-    keys = dict()
-    keys["client_id"] = self.settings["client_id"]
-    keys["client_secret"] = self.settings["client_secret"]
+    keys = getAuth(ctx)
     qstr = urllib.parse.urlencode(keys)
     url = "https://api.untappd.com/v4/beer/info/{!s}?{!s}".format(
         beerid, qstr
@@ -794,10 +792,10 @@ async def get_beer_by_id(self, beerid):
             return j['response']['beer']
 
 
-async def lookupBeer(self, beerid, rating=None, list_size=5):
+async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     """Look up a beer by id"""
 
-    beer = await get_beer_by_id(self, beerid)
+    beer = await get_beer_by_id(self, ctx, beerid)
     if (not beer or isinstance(beer, str)):
         return embedme("Problem looking up a beer by id")
     beer_url = "https://untappd.com/b/{}/{!s}".format(
@@ -806,9 +804,12 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     brewery_url = "https://untappd.com/brewery/{!s}".format(
         beer['brewery']['brewery_id'])
     beer_title = beer['beer_name']
+    beerTS = datetime.strptime(beer["created_at"],
+                               "%a, %d %b %Y %H:%M:%S %z")
     embed = discord.Embed(title=beer_title,
                           description=beer['beer_description'][:2048],
-                          url=beer_url)
+                          url=beer_url,
+                          timestamp=beerTS)
     embed.set_author(name=beer['brewery']['brewery_name'],
                      url=brewery_url,
                      icon_url=beer['brewery']['brewery_label'])
@@ -817,7 +818,10 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
     rating_str = "{!s} Caps ({})".format(
         round(beer['rating_score'], 2),
         human_number(beer['rating_count']))
-    embed.add_field(name="Rating", value=rating_str, inline=True)
+    rating_title = "Rating"
+    if beer["auth_rating"]:
+        rating_title += " ({!s})".format(beer["auth_rating"])
+    embed.add_field(name=rating_title, value=rating_str, inline=True)
     embed.add_field(name="ABV", value=beer['beer_abv'], inline=True)
     embed.add_field(name="IBU", value=beer['beer_ibu'], inline=True)
     if rating:
@@ -825,6 +829,37 @@ async def lookupBeer(self, beerid, rating=None, list_size=5):
                         value=str(rating),
                         inline=True)
     embed.set_thumbnail(url=beer['beer_label'])
+    stats_str = "{!s} checkins from {!s} users".format(
+        human_number(beer["stats"]["total_count"]),
+        human_number(beer["stats"]["total_user_count"])
+    )
+    if beer["stats"]["monthly_count"]:
+        stats_str += " ({!s} this month)".format(
+            human_number(beer["stats"]["monthly_count"])
+        )
+    stats_title = "Stats"
+    if beer["stats"]["user_count"]:
+        stats_title += " (You: {!s})".format(
+            human_number(beer["stats"]["user_count"])
+        )
+    embed.add_field(name=stats_title, value=stats_str, inline=True)
+    last_seen = "Never"
+    if beer["checkins"]["count"]:
+        last_checkin = datetime.strptime(
+            beer["checkins"]["items"][0]["created_at"],
+            "%a, %d %b %Y %H:%M:%S %z"
+        )  # Thu, 06 Nov 2014 18:54:35 +0000
+        nowtime = datetime.now(timezone.utc)
+        timediff = nowtime - last_checkin
+        last_seen = time_ago(timediff)
+    embed.add_field(name="Last Seen", value=last_seen, inline=True)
+
+    footer_str = "Beer {!s} ".format(beerid)
+    prod_str = ""
+    if not beer["is_in_production"]:
+        prod_str = "Not in production"
+    footer_str = footer_str + prod_str
+    embed.set_footer(text=footer_str)
 
     if "collaborations_with" in beer:
         collabStr = ""
@@ -880,7 +915,7 @@ async def toastIt(ctx, checkin: int, auth_token: str=None):
         return "I didn't get an error but I didn't get confirmation either"
 
 
-async def getCheckin(self, checkin: int, auth_token: str=None):
+async def getCheckin(self, ctx, checkin: int, auth_token: str=None):
     """Look up a specific checkin"""
 
     keys = dict()
@@ -909,7 +944,7 @@ async def getCheckin(self, checkin: int, auth_token: str=None):
             j["meta"]["error_detail"])
 
     user_checkin = j["response"]["checkin"]
-    return await checkin_to_embed(self, user_checkin)
+    return await checkin_to_embed(self, ctx, user_checkin)
 
 
 async def getCheckins(self, ctx, profile: str=None,
@@ -956,7 +991,7 @@ async def getCheckins(self, ctx, profile: str=None,
             )
 
     if j["response"]["checkins"]["count"] == 1:
-        embed = await checkin_to_embed(self,
+        embed = await checkin_to_embed(self, ctx,
                                        j["response"]["checkins"]["items"][0])
     elif j["response"]["checkins"]["count"] > 1:
         checkins = j["response"]["checkins"]["items"]
@@ -1001,8 +1036,8 @@ async def searchBeer(ctx, query, limit=None, rating=None):
             returnStr = "Your search for " + j['response']['parsed_term']
             returnStr += " found "
             if j['response']['beers']['count'] == 1:
-                return await lookupBeer(
-                    ctx.cog, j['response']['beers']['items'][0]['beer']['bid'],
+                return await lookupBeer(ctx.cog, ctx,
+                    j['response']['beers']['items'][0]['beer']['bid'],
                     list_size=limit)
             elif j['response']['beers']['count'] > 1:
                 returnStr += str(j['response']['beers']['count']) + " beers:\n"
@@ -1050,43 +1085,43 @@ async def searchBeer(ctx, query, limit=None, rating=None):
     if beer_list:
         result["beer_list"] = beer_list
     return (result)
-
-
-async def profileToBeer(self, profile):
-    """Takes a profile and returns the last beerid checked in"""
-    qstr = urllib.parse.urlencode({
-        "client_id": self.settings["client_id"],
-        "client_secret": self.settings["client_secret"]
-        })
-    url = "https://api.untappd.com/v4/user/info/{}?{}".format(profile, qstr)
-    beerid = None
-    rating = None
-
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        elif resp.status == 500:
-            return embedme("The profile '{}' doesn't exist".format(profile))
-        else:
-            print("Profile lookup '{!s}' failed: {}".format(url, resp.status))
-            return embedme("Profile lookup for '{}' failed".format(profile))
-
-        if j['meta']['code'] == 200:
-            try:
-                checkin = j['response']['user']['checkins']['items'][0]
-                beerid = checkin['beer']['bid']
-                if "rating_score" in checkin:
-                    rating = checkin["rating_score"]
-            except (KeyError, IndexError):
-                return embedme("No recent checkins for {}".format(profile))
-
-    if beerid:
-        return await lookupBeer(self,
-                                beerid=beerid,
-                                rating=rating)
-    else:
-        return embedme("User '{!s}' did not have a recent beer"
-                       .format(profile))
+#
+#
+# async def profileToBeer(self, ctx, profile):
+#     """Takes a profile and returns the last beerid checked in"""
+#     qstr = urllib.parse.urlencode({
+#         "client_id": self.settings["client_id"],
+#         "client_secret": self.settings["client_secret"]
+#         })
+#     url = "https://api.untappd.com/v4/user/info/{}?{}".format(profile, qstr)
+#     beerid = None
+#     rating = None
+#
+#     async with self.session.get(url) as resp:
+#         if resp.status == 200:
+#             j = await resp.json()
+#         elif resp.status == 500:
+#             return embedme("The profile '{}' doesn't exist".format(profile))
+#         else:
+#             print("Profile lookup '{!s}' failed: {}".format(url, resp.status))
+#             return embedme("Profile lookup for '{}' failed".format(profile))
+#
+#         if j['meta']['code'] == 200:
+#             try:
+#                 checkin = j['response']['user']['checkins']['items'][0]
+#                 beerid = checkin['beer']['bid']
+#                 if "rating_score" in checkin:
+#                     rating = checkin["rating_score"]
+#             except (KeyError, IndexError):
+#                 return embedme("No recent checkins for {}".format(profile))
+#
+#     if beerid:
+#         return await lookupBeer(self, ctx,
+#                                 beerid=beerid,
+#                                 rating=rating)
+#     else:
+#         return embedme("User '{!s}' did not have a recent beer"
+#                        .format(profile))
 
 
 async def profileLookup(self, profile, limit=5):
@@ -1208,9 +1243,10 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
     react -= 1
     if len(beer_list) > react:
         if type == "beer":
-            new_embed = await lookupBeer(self, beer_list[react], list_size=1)
+            new_embed = await lookupBeer(self, ctx,
+                                         beer_list[react], list_size=1)
         elif type == "checkin":
-            new_embed = await checkin_to_embed(self, beer_list[react])
+            new_embed = await checkin_to_embed(self, ctx, beer_list[react])
         await self.bot.say(embed=new_embed)
         try:
             try:
@@ -1243,11 +1279,11 @@ def checkins_to_string(self, count: int, checkins: list):
     return checkinStr
 
 
-async def checkin_to_embed(self, checkin):
+async def checkin_to_embed(self, ctx, checkin):
     """Given a checkin object return an embed of that checkin's information"""
 
     # Get the base beer information
-    beer = await get_beer_by_id(self, checkin["beer"]["bid"])
+    beer = await get_beer_by_id(self, ctx, checkin["beer"]["bid"])
     # titleStr = "Checkin {!s}".format(checkin["checkin_id"])
     url = ("https://untappd.com/user/{!s}/checkin/{!s}").format(
         checkin["user"]["user_name"],
@@ -1316,7 +1352,9 @@ async def checkin_to_embed(self, checkin):
             badgeStr += "{!s}\n".format(badge["badge_name"])
         embed.add_field(name="Badges", value=badgeStr[:1024])
 
-    embed.set_footer(text="Checkin {!s}".format(checkin["checkin_id"]))
+    embed.set_footer(text="Checkin {!s} / Beer {!s}"
+                     .format(checkin["checkin_id"],
+                             checkin["beer"]["bid"]))
     return embed
 
 
@@ -1349,3 +1387,39 @@ def human_number(number):
         return str(round(number / 1000, 1)) + "K"
     else:
         return str(number)
+
+
+def time_ago(timediff):
+    """Turns a timedelta into a string of how long ago a thing was"""
+
+    return_str = "unknown ago"
+    (years, days) = divmod(timediff.days, 365)
+    (months, days) = divmod(days, 30)
+    (hours, secs) = divmod(timediff.seconds, 3600)
+    (minutes, secs) = divmod(secs, 60)
+    if years:
+        return_str = "{!s} year{}, {!s} month{} ago".format(
+            years, add_s(years), months, add_s(months))
+    elif months:
+        return_str = "{!s} month{}, {!s} day{} ago".format(
+            months, add_s(months), days, add_s(days))
+    elif days:
+        return_str = "{!s} day{}, {!s} hour{} ago".format(
+            days, add_s(days), hours, add_s(hours))
+    elif hours:
+        return_str = "{!s} hour{}, {!s} minute{} ago".format(
+            hours, add_s(hours), minutes, add_s(minutes))
+    elif minutes:
+        return_str = "{!s} minute{}, {!s} second{} ago".format(
+            minutes, add_s(minutes), secs, add_s(secs))
+    elif secs:
+        return_str = "less than a minute ago"
+
+    return return_str
+
+
+def add_s(num):
+    """If it's 1, return blank otherwise return s"""
+    if num == 1:
+        return ""
+    return "s"
