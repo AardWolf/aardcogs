@@ -414,8 +414,10 @@ class Untappd:
                     checkin = self.channels[channel]
 
         if not checkin:
-            return("I haven't seen a checkin for this channel since my last "
-                   "start. You'll have to tell me which to toast.")
+            await self.bot.say("I haven't seen a checkin for this channel "
+                               "since my last start. You'll have to tell me "
+                               "which to toast.")
+            return
 
         embed = await toastIt(ctx, checkin=checkin, auth_token=auth_token)
         if isinstance(embed, str):
