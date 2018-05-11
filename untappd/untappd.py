@@ -845,13 +845,7 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     embed.add_field(name=stats_title, value=stats_str, inline=True)
     last_seen = "Never"
     if beer["checkins"]["count"]:
-        last_checkin = datetime.strptime(
-            beer["checkins"]["items"][0]["created_at"],
-            "%a, %d %b %Y %H:%M:%S %z"
-        )  # Thu, 06 Nov 2014 18:54:35 +0000
-        nowtime = datetime.now(timezone.utc)
-        timediff = nowtime - last_checkin
-        last_seen = time_ago(timediff)
+        last_seen = time_ago(beer["checkins"]["items"][0]["created_at"])
     embed.add_field(name="Last Seen", value=last_seen, inline=True)
 
     footer_str = "Beer {!s} ".format(beerid)
@@ -1260,12 +1254,14 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
 
 def checkins_to_string(self, count: int, checkins: list):
     """Takes a list of checkins and returns a string"""
-    checkinStr = "checkin - bid - beer (caps) - brewery - badges\n"
+    checkinStr = ("**checkin** - **bid** - **beer (caps)**\n\t**brewery**"
+                  " - **badges** - **when**\n")
     for num, checkin in zip(range(count), checkins):
         checkinStr += ("{!s}{!s} - {!s} - "
                        "[{!s}](https://untappd.com/beer/{!s})"
-                       " ({!s}) - [{!s}](https://untappd.com/brewery/{!s})"
-                       " - {!s}\n").format(
+                       " ({!s})\n......by [{!s}]"
+                       "(https://untappd.com/brewery/{!s})"
+                       ).format(
                     self.emoji[num+1],
                     checkin["checkin_id"],
                     checkin["beer"]["bid"],
@@ -1273,9 +1269,14 @@ def checkins_to_string(self, count: int, checkins: list):
                     checkin["beer"]["bid"],
                     checkin["rating_score"] or "N/A",
                     checkin["brewery"]["brewery_name"],
-                    checkin["brewery"]["brewery_id"],
-                    checkin["badges"]["count"]
+                    checkin["brewery"]["brewery_id"]
                 )
+        if checkin["badges"]["count"]:
+            checkinStr += " - {!s} badge{!s}".format(
+                checkin["badges"]["count"],
+                add_s(checkin["badges"]["count"])
+                )
+        checkinStr += " - {!s}\n".format(time_ago(checkin["created_at"]))
     return checkinStr
 
 
@@ -1389,10 +1390,14 @@ def human_number(number):
         return str(number)
 
 
-def time_ago(timediff):
-    """Turns a timedelta into a string of how long ago a thing was"""
+def time_ago(time_str):
+    """Turns a time string into a string of how long ago a thing was"""
 
     return_str = "unknown ago"
+    timewas = datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S %z")
+    # Thu, 06 Nov 2014 18:54:35 +0000
+    nowtime = datetime.now(timezone.utc)
+    timediff = nowtime - timewas
     (years, days) = divmod(timediff.days, 365)
     (months, days) = divmod(days, 30)
     (hours, secs) = divmod(timediff.seconds, 3600)
