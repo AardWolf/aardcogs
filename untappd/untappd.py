@@ -237,6 +237,7 @@ class Untappd:
             return
 
         set_beer_id = False
+        await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
             beerid = keywords
         else:
