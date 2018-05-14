@@ -196,6 +196,10 @@ class Untappd:
         if author not in self.settings:
             self.settings[author] = {}
         self.settings[author]["token"] = keyword
+        try:
+            await self.bot.delete_message(ctx.message)
+        except:
+            pass
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.whisper("Token saved, thank you")
 
@@ -237,6 +241,7 @@ class Untappd:
             return
 
         set_beer_id = False
+        await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
             beerid = keywords
         else:
