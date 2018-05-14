@@ -1329,7 +1329,7 @@ def checkins_to_string(self, count: int, checkins: list):
     for num, checkin in zip(range(count), checkins):
         checkinStr += ("{!s}{!s} - {!s} - "
                        "[{!s}](https://untappd.com/beer/{!s})"
-                       " ({!s})\n......by [{!s}]"
+                       " ({!s})\n by [{!s}]"
                        "(https://untappd.com/brewery/{!s})"
                        ).format(
                     self.emoji[num+1],
