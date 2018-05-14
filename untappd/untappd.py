@@ -214,8 +214,8 @@ class Untappd:
         await self.bot.say(response)
 
     @commands.command(pass_context=True, no_pm=False)
-    async def haveihad(self, ctx, beerid: int):
-        """Lookup by beer id to see if you've had it
+    async def haveihad(self, ctx, *keywords):
+        """Lookup a beer to see if you've had it
         Requires that you've authenticated the bot to act as you"""
 
         resultStr = ""
@@ -229,6 +229,20 @@ class Untappd:
             await self.bot.say("You must first authorize me to act as you"
                                " using `untappd authme`")
             return
+
+        if keywords:
+            keywords = "+".join(keywords)
+        else:
+            await self.bot.send_cmd_help(ctx)
+            return
+
+        set_beer_id = False
+        if keywords.isdigit():
+            beerid = keywords
+        else:
+            beers = await searchBeer(ctx, keywords, limit=1)
+            beerid = beers["items"][0]["beer"]["bid"]
+            set_beer_id = True
 
         if beerid:
             beer = await get_beer_by_id(self, ctx, beerid)
@@ -244,9 +258,14 @@ class Untappd:
                                   add_s(beer["stats"]["user_count"])
                               )
                 if beer["auth_rating"]:
-                    resultStr += " and you gave it {!s} cap{!s}".format(
+                    resultStr += " and you gave it {!s} cap{!s}.".format(
                         beer["auth_rating"],
                         add_s(beer["auth_rating"])
+                    )
+                if set_beer_id:
+                    resultStr += " `{!s}findbeer {!s}` to see details.".format(
+                        ctx.prefix,
+                        beerid
                     )
             else:
                 resultStr += ("You have never had '**{!s}**' by **{!s}**"
@@ -255,8 +274,13 @@ class Untappd:
                                   beer["brewery"]["brewery_name"]
                               )
                 if beer["stats"]["total_user_count"]:
-                    resultStr += (" but {!s} other people have").format(
+                    resultStr += (" but {!s} other people have.").format(
                         human_number(beer["stats"]["total_user_count"])
+                    )
+                if set_beer_id:
+                    resultStr += " `{!s}findbeer {!s}` to see details.".format(
+                        ctx.prefix,
+                        beerid
                     )
         else:
             await self.bot.send_cmd_help(ctx)
@@ -292,7 +316,8 @@ class Untappd:
             embed = await lookupBeer(self, ctx, keywords, list_size=1)
             # await self.bot.say( embed=embed)
         else:
-            results = await searchBeer(ctx, keywords, limit=list_limit)
+            results = await searchBeer_to_embed(ctx, keywords,
+                                                limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
                 if "beer_list" in results:
@@ -314,7 +339,7 @@ class Untappd:
         embed = False
         resultStr = ""
         await self.bot.send_typing(ctx.message.channel)
-        results = await searchBeer(ctx, " ".join(keywords), limit=1)
+        results = await searchBeer_to_embed(ctx, " ".join(keywords), limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
             await self.bot.say(resultStr, embed=embed)
@@ -1073,9 +1098,7 @@ async def getCheckins(self, ctx, profile: str=None,
 async def searchBeer(ctx, query, limit=None, rating=None):
     """Given a query string and some other
     information returns an embed of results"""
-    returnStr = ""
-    resultStr = ""
-    list_limit = limit or list_size(ctx.cog, None)
+
     keys = getAuth(ctx)
     keys["q"] = query
     keys["limit"] = limit
@@ -1088,61 +1111,74 @@ async def searchBeer(ctx, query, limit=None, rating=None):
             if resp.status == 200:
                 j = await resp.json()
             else:
-                return embedme("Beer search failed with code " +
-                               str(resp.status))
-
-            beers = []
-            beer_list = []
-            firstnum = 1
+                return ("Beer search failed with code " +
+                        str(resp.status))
 
         # Confirm success
         if j['meta']['code'] == 200:
-            returnStr = "Your search for " + j['response']['parsed_term']
-            returnStr += " found "
-            if j['response']['beers']['count'] == 1:
-                return await lookupBeer(ctx.cog, ctx,
-                    j['response']['beers']['items'][0]['beer']['bid'],
-                    list_size=limit)
-            elif j['response']['beers']['count'] > 1:
-                returnStr += str(j['response']['beers']['count']) + " beers:\n"
-                beers = j['response']['beers']['items']
-                for num, beer in zip(range(list_limit),
-                                     beers):
-                    resultStr += ctx.cog.emoji[num+1] + " "
-                    resultStr += str(beer['beer']['bid']) + ". ["
-                    resultStr += beer['beer']['beer_name'] + "]"
-                    resultStr += "(" + "https://untappd.com/beer/"
-                    resultStr += str(beer['beer']['bid']) + ") "
-                    brewery = ("by *[{!s}](https://untappd.com/w/"
-                               "{!s}/{!s})*").format(
-                                beer['brewery']['brewery_name'],
-                                beer['brewery']['brewery_slug'],
-                                beer['brewery']['brewery_id'])
-                    resultStr += brewery
-                    if beer['beer']['auth_rating']:
-                        resultStr += " ({!s})".format(
-                            beer['beer']['auth_rating']
-                        )
-                    elif beer['have_had']:
-                        resultStr += " (\*)"
-                    resultStr += "\n"
-                    beer_list.append(beer['beer']['bid'])
-                    if firstnum == 1:
-                        firstnum = beer['beer']['bid']
-
-                resultStr += "Look up a beer with `findbeer "
-                resultStr += str(firstnum) + "`"
-            else:
-                returnStr += "no beers"
-                # print(json.dumps(j, indent=4))
-
+            return j['response']['beers']
+        else:
+            return "Found no beers but got no errors"
     except (aiohttp.errors.ClientResponseError,
             aiohttp.errors.ClientRequestError,
             aiohttp.errors.ClientOSError,
             aiohttp.errors.ClientDisconnectedError,
             aiohttp.errors.ClientTimeoutError,
             aiohttp.errors.HttpProcessingError) as exc:
-        return embedme("Search failed with {%s}".format(exc))
+        return "Search failed with {%s}".format(exc)
+
+
+async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
+    """Searches for a beer and returns an embed"""
+    beers = await searchBeer(ctx, query, limit, rating)
+    if isinstance(beers, str):
+        return embedme(beers)
+
+    returnStr = ""
+    list_limit = limit or list_size(ctx.cog, None)
+    resultStr = "You search returned {!s} beers:\n".format(
+        beers["count"]
+    )
+    if beers['count'] == 1:
+        return await lookupBeer(
+            ctx.cog, ctx,
+            beers['items'][0]['beer']['bid'],
+            list_size=limit)
+    elif beers['count'] > 1:
+        beer_list = []
+        firstnum = 1
+
+        beers = beers['items']
+        for num, beer in zip(range(list_limit),
+                             beers):
+            resultStr += ctx.cog.emoji[num+1] + " "
+            resultStr += str(beer['beer']['bid']) + ". ["
+            resultStr += beer['beer']['beer_name'] + "]"
+            resultStr += "(" + "https://untappd.com/beer/"
+            resultStr += str(beer['beer']['bid']) + ") "
+            brewery = ("by *[{!s}](https://untappd.com/w/"
+                       "{!s}/{!s})*").format(
+                        beer['brewery']['brewery_name'],
+                        beer['brewery']['brewery_slug'],
+                        beer['brewery']['brewery_id'])
+            resultStr += brewery
+            if beer['beer']['auth_rating']:
+                resultStr += " ({!s})".format(
+                    beer['beer']['auth_rating']
+                )
+            elif beer['have_had']:
+                resultStr += " (\*)"
+            resultStr += "\n"
+            beer_list.append(beer['beer']['bid'])
+            if firstnum == 1:
+                firstnum = beer['beer']['bid']
+
+        resultStr += "Look up a beer with `findbeer "
+        resultStr += str(firstnum) + "`"
+    else:
+        returnStr += "no beers"
+        # print(json.dumps(j, indent=4))
+
     embed = discord.Embed(title=returnStr, description=resultStr[:2048])
     result = dict()
     result["embed"] = embed
