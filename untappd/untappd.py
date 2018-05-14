@@ -196,6 +196,10 @@ class Untappd:
         if author not in self.settings:
             self.settings[author] = {}
         self.settings[author]["token"] = keyword
+        try:
+            await self.bot.delete_message(ctx.message)
+        except:
+            pass
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.whisper("Token saved, thank you")
 
