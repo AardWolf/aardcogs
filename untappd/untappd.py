@@ -215,8 +215,8 @@ class Untappd:
 
     @commands.command(pass_context=True, no_pm=False)
     async def haveihad(self, ctx, beerid: int):
-        """Lookup on untappd by a beer id to see if asker has had it"""
-        """Requires that you've authenticated the bot to act as you"""
+        """Lookup by beer id to see if you've had it
+        Requires that you've authenticated the bot to act as you"""
 
         resultStr = ""
         if not check_credentials(self.settings):
