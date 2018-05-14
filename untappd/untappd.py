@@ -214,6 +214,60 @@ class Untappd:
         await self.bot.say(response)
 
     @commands.command(pass_context=True, no_pm=False)
+    async def haveihad(self, ctx, beerid: int):
+        """Lookup by beer id to see if you've had it
+        Requires that you've authenticated the bot to act as you"""
+
+        resultStr = ""
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information " +
+                               "and should use the `untappd_apikey` command")
+            return
+
+        keys = getAuth(ctx)
+        if "access_token" not in keys:
+            await self.bot.say("You must first authorize me to act as you"
+                               " using `untappd authme`")
+            return
+
+        if beerid:
+            beer = await get_beer_by_id(self, ctx, beerid)
+            if isinstance(beer, str):
+                await self.bot.say(beer)
+                return
+            if beer["stats"]["user_count"]:
+                resultStr += ("You have had '**{!s}**' by **{!s}** {!s} "
+                              "time{!s}").format(
+                                  beer["beer_name"],
+                                  beer["brewery"]["brewery_name"],
+                                  beer["stats"]["user_count"],
+                                  add_s(beer["stats"]["user_count"])
+                              )
+                if beer["auth_rating"]:
+                    resultStr += " and you gave it {!s} cap{!s}".format(
+                        beer["auth_rating"],
+                        add_s(beer["auth_rating"])
+                    )
+            else:
+                resultStr += ("You have never had '**{!s}**' by **{!s}**"
+                              ).format(
+                                  beer["beer_name"],
+                                  beer["brewery"]["brewery_name"]
+                              )
+                if beer["stats"]["total_user_count"]:
+                    resultStr += (" but {!s} other people have").format(
+                        human_number(beer["stats"]["total_user_count"])
+                    )
+        else:
+            await self.bot.send_cmd_help(ctx)
+            return
+
+        if resultStr:
+            await self.bot.say(resultStr)
+        else:
+            await self.bot.say("You may not have provided a beer ID")
+
+    @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
         """Search Untappd.com using the API"""
         """A search uses characters, a lookup uses numbers"""
@@ -558,6 +612,10 @@ class Untappd:
             await self.bot.say("Looks like there are no projects right now")
             return
         beer = await get_beer_by_id(self, ctx, bid)
+        if (isinstance(beer, str)):
+            # This happens in error situations
+            await self.bot.say(beer)
+            return
         keys = {
             "bid": bid,
             "username": profile,
@@ -1266,12 +1324,12 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
 
 def checkins_to_string(self, count: int, checkins: list):
     """Takes a list of checkins and returns a string"""
-    checkinStr = ("**checkin** - **bid** - **beer (caps)**\n\t**brewery**"
+    checkinStr = ("**checkin** - **beerID** - **beer (caps)**\n\t**brewery**"
                   " - **badges** - **when**\n")
     for num, checkin in zip(range(count), checkins):
         checkinStr += ("{!s}{!s} - {!s} - "
                        "[{!s}](https://untappd.com/beer/{!s})"
-                       " ({!s})\n......by [{!s}]"
+                       " ({!s})\n by [{!s}]"
                        "(https://untappd.com/brewery/{!s})"
                        ).format(
                     self.emoji[num+1],
