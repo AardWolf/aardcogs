@@ -198,7 +198,7 @@ class Untappd:
         self.settings[author]["token"] = keyword
         try:
             await self.bot.delete_message(ctx.message)
-        except:
+        except BaseException:
             pass
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.whisper("Token saved, thank you")
@@ -1144,13 +1144,13 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
     resultStr = "You search returned {!s} beers:\n".format(
         beers["count"]
     )
+    beer_list = []
     if beers['count'] == 1:
         return await lookupBeer(
             ctx.cog, ctx,
             beers['items'][0]['beer']['bid'],
             list_size=limit)
     elif beers['count'] > 1:
-        beer_list = []
         firstnum = 1
 
         beers = beers['items']
