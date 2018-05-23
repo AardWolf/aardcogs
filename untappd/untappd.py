@@ -890,7 +890,7 @@ async def get_beer_by_id(self, ctx, beerid):
 
 
 async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
-    """Look up a beer by id"""
+    """Look up a beer by id, returns an embed"""
 
     beer = await get_beer_by_id(self, ctx, beerid)
     if (not beer or isinstance(beer, str)):
@@ -910,6 +910,8 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     embed.set_author(name=beer['brewery']['brewery_name'],
                      url=brewery_url,
                      icon_url=beer['brewery']['brewery_label'])
+    embed.add_field(name="Brewery Home",
+                    value=brewery_location(beer['brewery']))
     embed.add_field(name="Style", value=beer['beer_style'],
                     inline=True)
     rating_str = "{!s} Caps ({})".format(
@@ -1137,7 +1139,9 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
     """Searches for a beer and returns an embed"""
     beers = await searchBeer(ctx, query, limit, rating)
     if isinstance(beers, str):
-        return embedme(beers)
+        # I'm not sure what happens when a naked embed gets returned.
+        # return embedme(beers)
+        return beers
 
     returnStr = ""
     list_limit = limit or list_size(ctx.cog, None)
@@ -1190,43 +1194,6 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
     if beer_list:
         result["beer_list"] = beer_list
     return (result)
-#
-#
-# async def profileToBeer(self, ctx, profile):
-#     """Takes a profile and returns the last beerid checked in"""
-#     qstr = urllib.parse.urlencode({
-#         "client_id": self.settings["client_id"],
-#         "client_secret": self.settings["client_secret"]
-#         })
-#     url = "https://api.untappd.com/v4/user/info/{}?{}".format(profile, qstr)
-#     beerid = None
-#     rating = None
-#
-#     async with self.session.get(url) as resp:
-#         if resp.status == 200:
-#             j = await resp.json()
-#         elif resp.status == 500:
-#             return embedme("The profile '{}' doesn't exist".format(profile))
-#         else:
-#             print("Profile lookup '{!s}' failed: {}".format(url, resp.status))
-#             return embedme("Profile lookup for '{}' failed".format(profile))
-#
-#         if j['meta']['code'] == 200:
-#             try:
-#                 checkin = j['response']['user']['checkins']['items'][0]
-#                 beerid = checkin['beer']['bid']
-#                 if "rating_score" in checkin:
-#                     rating = checkin["rating_score"]
-#             except (KeyError, IndexError):
-#                 return embedme("No recent checkins for {}".format(profile))
-#
-#     if beerid:
-#         return await lookupBeer(self, ctx,
-#                                 beerid=beerid,
-#                                 rating=rating)
-#     else:
-#         return embedme("User '{!s}' did not have a recent beer"
-#                        .format(profile))
 
 
 async def profileLookup(self, profile, limit=5):
@@ -1417,6 +1384,18 @@ async def checkin_to_embed(self, ctx, checkin):
             url=checkin["media"]["items"][0]["photo"]["photo_img_md"]
             )
     # Add fields of interest
+    beer_link = "[{!s}](https://untappd.com/beer/{!s})".format(
+        checkin["beer"]["beer_name"],
+        checkin["beer"]["bid"]
+    )
+    embed.add_field(name="Beer", value=beer_link)
+    brewery_link = "[{!s}](https://untappd.com/brewery/{!s})".format(
+        checkin["brewery"]["brewery_name"],
+        checkin["brewery"]["brewery_id"]
+    )
+    brewery_link += " in {!s}".format(
+        brewery_location(checkin["brewery"]))
+    embed.add_field(name="Brewery", value=brewery_link)
     if isinstance(checkin["venue"], dict):
         venueStr = "[{!s}](https://untappd.com/venue/{!s})".format(
             checkin["venue"]["venue_name"],
@@ -1556,3 +1535,21 @@ def add_s(num):
     if num == 1:
         return ""
     return "s"
+
+
+def brewery_location(brewery):
+    """Takes an untappd brewery response and returns a location string"""
+
+    brewery_loca = []
+    if "brewery_city" in brewery["location"]:
+        if brewery["location"]["brewery_city"]:
+            brewery_loca.append(brewery["location"]["brewery_city"])
+    if "brewery_state" in brewery["location"]:
+        if brewery["location"]["brewery_state"]:
+            brewery_loca.append(
+                brewery["location"]["brewery_state"]
+                )
+    if "country_name" in brewery:
+        if brewery["country_name"]:
+            brewery_loca.append(brewery["country_name"])
+    return format(', '.join(brewery_loca))
