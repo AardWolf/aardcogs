@@ -672,7 +672,7 @@ class Untappd:
                 await self.bot.say("Something went wrong adding the beer")
 
     @commands.command(pass_context=True, no_pm=False)
-    async def idrank(self, ctx, checkin_id: int=0):
+    async def ddp(self, ctx, checkin_id: int=0):
         """Add a checkin to the spreadsheet. Defaults to last one"""
 
         author = ctx.message.author
@@ -806,6 +806,40 @@ class Untappd:
                                        .format(checkin_id))
             else:
                 await self.bot.say("Something went wrong adding the checkin")
+
+    @commands.command(pass_context=True, no_pm=True)
+    async def undrank(self, ctx, checkin_id: int):
+        """Removes a checkin from the spreadsheet. Use ddp to add it back"""
+
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+            if "project_url" in self.settings[guild]:
+                url = self.settings[guild]["project_url"]
+        else:
+            await self.bot.say("This does not work in PM")
+
+        await self.bot.send_typing(ctx.message.channel)
+        if not url:
+            await self.bot.say("Looks like there are no projects right now")
+            return
+
+        payload = {
+            "action": "undrank",
+            "checkin": checkin_id,
+        }
+        async with self.session.post(url, data=payload) as resp:
+            if resp.status == 200:
+                j = await resp.json()
+            else:
+                return "Query failed with code " + str(resp.status)
+
+            if j['result'] == "success":
+                await self.bot.say(("Checkin {!s} removed from the scoreboard"
+                                    " if it existed").format(checkin_id)
+                                   )
+            else:
+                await self.bot.say("Something went wrong adding the checkin")
+                # print(j)
 
 
 def check_folders():
