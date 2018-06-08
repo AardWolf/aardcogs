@@ -118,7 +118,7 @@ class Untappd:
         # The true maximum size is 10 because there's that many emoji
         if new_size > 10:
             new_size = 10
-            await self.bot.say("Reducing the maximum size to " +
+            await self.bot.say("Reducing the maximum size to "
                                "10 due to emoji constraints")
         if is_pm:
             self.settings["max_items_in_list"] = new_size
@@ -133,8 +133,8 @@ class Untappd:
         """The moji to use for supporters"""
         self.settings["supporter_emoji"] = str(emoji)
         dataIO.save_json("data/untappd/settings.json", self.settings)
-        await self.bot.say("Profiles of supporters will now display (" +
-                           str(emoji) + ")")
+        await self.bot.say("Profiles of supporters will now display ("
+                           + str(emoji) + ")")
 
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
@@ -142,8 +142,8 @@ class Untappd:
         """The emoji to use for super users"""
         self.settings["moderator_emoji"] = str(emoji)
         dataIO.save_json("data/untappd/settings.json", self.settings)
-        await self.bot.say("Profiles of super users will now display (" +
-                           str(emoji) + ")")
+        await self.bot.say("Profiles of super users will now display ("
+                           + str(emoji) + ")")
 
     @untappd.command(pass_context=True, no_pm=True)
     async def setnick(self, ctx, keywords):
@@ -159,7 +159,7 @@ class Untappd:
             if author not in self.settings[server]:
                 self.settings[server][author] = {}
             self.settings[server][author]["nick"] = keywords
-            await self.bot.say("When you look yourself up on untappd" +
+            await self.bot.say("When you look yourself up on untappd"
                                " I will use `" + keywords + "`")
             dataIO.save_json("data/untappd/settings.json", self.settings)
         else:
@@ -218,13 +218,86 @@ class Untappd:
         await self.bot.say(response)
 
     @commands.command(pass_context=True, no_pm=False)
+    async def wishlist(self, ctx, *keywords):
+        """Requires that you've authorized the bot.
+        Adds a beer to or removes a beer from your wishlist.
+        If you privde a beer id, that's used.
+        Otherwise it's the first search result"""
+
+        me = self.bot
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information "
+                               "and should use the `untappd_apikey` command")
+            return
+
+        keys = getAuth(ctx)
+        if "access_token" not in keys:
+            await self.bot.say("You must first authorize me to act as you"
+                               " using `untappd authme`")
+            return
+
+        if keywords:
+            keywords = "+".join(keywords)
+        else:
+            await self.bot.send_cmd_help(ctx)
+            return
+
+        await self.bot.send_typing(ctx.message.channel)
+        if keywords.isdigit():
+            beerid = keywords
+        else:
+            beers = await searchBeer(ctx, keywords, limit=1)
+            beerid = beers["items"][0]["beer"]["bid"]
+
+        if beerid:
+            # Attempt to add to the wishlist
+            if "access_token" not in keys:
+                return("You have not authorized the bot to act as you, use"
+                       "`untappd authme` to start the process")
+
+            keys["bid"] = beerid
+            qstr = urllib.parse.urlencode(keys)
+            url = ("https://api.untappd.com/v4/user/wishlist/add?{!s}"
+                   ).format(qstr)
+            # print("Using URL: {!s}".format(url))
+
+            async with self.session.get(url) as resp:
+                if resp.status == 200:
+                    j = await resp.json()
+                    beer = j['response']['beer']['beer']
+                    beer['brewery'] = j['response']['beer']['brewery']
+                    embed = beer_to_embed(beer)
+                    await me.say("Beer added to wishlist", embed=embed)
+                    return
+                elif resp.status == 500:
+                    print("That didn't quite work with '" + url + "'")
+                    print(resp)
+                    url = ("https://api.untappd.com/v4/user/wishlist/"
+                           "delete?{!s}").format(qstr)
+                    async with self.session.get(url) as unwl:
+                        if unwl.status == 200:
+                            j = await unwl.json()
+                            beer = j['response']['beer']['beer']
+                            beer['brewery'] = j['response']['beer']['brewery']
+                            embed = beer_to_embed(beer)
+                            await me.say("Beer removed from wishlist",
+                                         embed=embed)
+                        else:
+                            print("That didn't quite work with '" + url + "'")
+                            print(unwl)
+                            await me.say("I tried adding it, I tried removing"
+                                         "it. Nothing I tried worked")
+        else:
+            await me.say("I was unable to find such a beer, sorry")
+
+    @commands.command(pass_context=True, no_pm=False)
     async def haveihad(self, ctx, *keywords):
         """Lookup a beer to see if you've had it
         Requires that you've authenticated the bot to act as you"""
 
         resultStr = ""
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -306,7 +379,7 @@ class Untappd:
         list_limit = list_size(self, ctx.message.server)
 
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -352,7 +425,7 @@ class Untappd:
             await self.bot.say(resultStr, embed=results)
 
     @commands.command(pass_context=True)
-    async def lastbeer(self, ctx, profile: str=None):
+    async def lastbeer(self, ctx, profile: str = None):
         """Displays details for the last beer a person had"""
 
         embed = False
@@ -364,7 +437,7 @@ class Untappd:
             guild = 0
 
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -395,7 +468,7 @@ class Untappd:
         return
 
     @commands.command(pass_context=True, no_pm=False)
-    async def profile(self, ctx, profile: str=None):
+    async def profile(self, ctx, profile: str = None):
         """Search for a user's information by providing their profile name,
         discord mentions OK"""
 
@@ -409,7 +482,7 @@ class Untappd:
             guild = 0
 
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -461,7 +534,7 @@ class Untappd:
             dataIO.save_json("data/untappd/settings.json", self.settings)
             await self.bot.say("API set")
         else:
-            await self.bot.say("I am expecting two words, the id and " +
+            await self.bot.say("I am expecting two words, the id and "
                                "the secret only")
 
     @commands.command(pass_context=True, no_pm=False)
@@ -473,7 +546,7 @@ class Untappd:
         checkin = 0
 
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -518,7 +591,7 @@ class Untappd:
         checkin = 0
 
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -560,7 +633,7 @@ class Untappd:
         countnum = list_size(self, server=ctx.message.server)
         # determine if a profile or number was given
         if not check_credentials(self.settings):
-            await self.bot.say("The owner has not set the API information " +
+            await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
             return
 
@@ -672,7 +745,7 @@ class Untappd:
                 await self.bot.say("Something went wrong adding the beer")
 
     @commands.command(pass_context=True, no_pm=False)
-    async def ddp(self, ctx, checkin_id: int=0):
+    async def ddp(self, ctx, checkin_id: int = 0):
         """Add a checkin to the spreadsheet. Defaults to last one"""
 
         author = ctx.message.author
@@ -929,14 +1002,26 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     beer = await get_beer_by_id(self, ctx, beerid)
     if (not beer or isinstance(beer, str)):
         return embedme("Problem looking up a beer by id")
+    embed = beer_to_embed(beer)
+    return embed
+
+
+def beer_to_embed(beer, rating=None, list_size=5):
+    """Takes a beer json respons object and returns an embed"""
+    if 'bid' not in beer:
+        return embedme("No bid, didn't look like a beer")
+    beerid = beer['bid']
     beer_url = "https://untappd.com/b/{}/{!s}".format(
         beer['beer_slug'],
         beer['bid'])
     brewery_url = "https://untappd.com/brewery/{!s}".format(
         beer['brewery']['brewery_id'])
     beer_title = beer['beer_name']
-    beerTS = datetime.strptime(beer["created_at"],
-                               "%a, %d %b %Y %H:%M:%S %z")
+    if 'created_at' in beer:
+        beerTS = datetime.strptime(beer["created_at"],
+                                   "%a, %d %b %Y %H:%M:%S %z")
+    else:
+        beerTS = datetime.now(timezone.utc)
     embed = discord.Embed(title=beer_title,
                           description=beer['beer_description'][:2048],
                           url=beer_url,
@@ -948,9 +1033,12 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
                     value=brewery_location(beer['brewery']))
     embed.add_field(name="Style", value=beer['beer_style'],
                     inline=True)
-    rating_str = "{!s} Caps ({})".format(
-        round(beer['rating_score'], 2),
-        human_number(beer['rating_count']))
+    try:
+        rating_str = "{!s} Caps ({})".format(
+            round(beer['rating_score'], 2),
+            human_number(beer['rating_count']))
+    except Exception:
+        rating_str = "Unknown"
     rating_title = "Rating"
     if beer["auth_rating"]:
         rating_title += " ({!s})".format(beer["auth_rating"])
@@ -962,24 +1050,26 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
                         value=str(rating),
                         inline=True)
     embed.set_thumbnail(url=beer['beer_label'])
-    stats_str = "{!s} checkins from {!s} users".format(
-        human_number(beer["stats"]["total_count"]),
-        human_number(beer["stats"]["total_user_count"])
-    )
-    if beer["stats"]["monthly_count"]:
-        stats_str += " ({!s} this month)".format(
-            human_number(beer["stats"]["monthly_count"])
+    if 'stats' in beer:
+        stats_str = "{!s} checkins from {!s} users".format(
+            human_number(beer["stats"]["total_count"]),
+            human_number(beer["stats"]["total_user_count"])
         )
-    stats_title = "Stats"
-    if beer["stats"]["user_count"]:
-        stats_title += " (You: {!s})".format(
-            human_number(beer["stats"]["user_count"])
-        )
-    embed.add_field(name=stats_title, value=stats_str, inline=True)
+        if beer["stats"]["monthly_count"]:
+            stats_str += " ({!s} this month)".format(
+                human_number(beer["stats"]["monthly_count"])
+            )
+        stats_title = "Stats"
+        if beer["stats"]["user_count"]:
+            stats_title += " (You: {!s})".format(
+                human_number(beer["stats"]["user_count"])
+            )
+        embed.add_field(name=stats_title, value=stats_str, inline=True)
     last_seen = "Never"
-    if beer["checkins"]["count"]:
-        last_seen = time_ago(beer["checkins"]["items"][0]["created_at"],
-                             long=True)
+    if 'checkins' in beer:
+        if beer["checkins"]["count"]:
+            last_seen = time_ago(beer["checkins"]["items"][0]["created_at"],
+                                 long=True)
     embed.add_field(name="Last Seen", value=last_seen, inline=True)
 
     footer_str = "Beer {!s} ".format(beerid)
@@ -1000,7 +1090,7 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     return embed
 
 
-async def toastIt(ctx, checkin: int, auth_token: str=None):
+async def toastIt(ctx, checkin: int, auth_token: str = None):
     """Toast a specific checkin"""
 
     me = ctx.cog
@@ -1045,7 +1135,7 @@ async def toastIt(ctx, checkin: int, auth_token: str=None):
         return "I didn't get an error but I didn't get confirmation either"
 
 
-async def getCheckin(self, ctx, checkin: int, auth_token: str=None):
+async def getCheckin(self, ctx, checkin: int, auth_token: str = None):
     """Look up a specific checkin"""
 
     keys = dict()
@@ -1077,8 +1167,8 @@ async def getCheckin(self, ctx, checkin: int, auth_token: str=None):
     return await checkin_to_embed(self, ctx, user_checkin)
 
 
-async def getCheckins(self, ctx, profile: str=None,
-                      start: int=None, count: int=0):
+async def getCheckins(self, ctx, profile: str = None,
+                      start: int = None, count: int = 0):
     """Given some information get checkins of a user"""
     # Sanitize our inputs
     if ctx.message.server:
@@ -1152,8 +1242,8 @@ async def searchBeer(ctx, query, limit=None, rating=None):
             if resp.status == 200:
                 j = await resp.json()
             else:
-                return ("Beer search failed with code " +
-                        str(resp.status))
+                return ("Beer search failed with code "
+                        + str(resp.status))
 
         # Confirm success
         if j['meta']['code'] == 200:
@@ -1318,8 +1408,8 @@ and a checkin list"""
     return (embed, beerList)
 
 
-async def embed_menu(self, ctx, beer_list: list, message, timeout: int=30,
-                     type: str="beer"):
+async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
+                     type: str = "beer"):
     """Says the message with the embed and adds menu for reactions"""
     emoji = []
     limit = list_size(self, ctx.message.server)
