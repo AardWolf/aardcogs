@@ -8,6 +8,8 @@ import os
 import urllib.parse
 from __main__ import send_cmd_help
 from datetime import datetime, timezone
+import time
+from random import randint
 
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
@@ -285,8 +287,6 @@ class Untappd:
                     await me.say("Beer added to wishlist", embed=embed)
                     return
                 elif resp.status == 500:
-                    print("That didn't quite work with '" + url + "'")
-                    print(resp)
                     url = ("https://api.untappd.com/v4/user/wishlist/"
                            "delete?{!s}").format(qstr)
                     async with self.session.get(url) as unwl:
@@ -597,6 +597,36 @@ class Untappd:
             await self.bot.say(embed)
         else:
             await self.bot.say("", embed=embed)
+
+    @commands.command(pass_context=True, no_pm=False)
+    async def toastlist(self, ctx, *keywords):
+        """Requires that you've authorized the bot.
+        This command is shorthand for toasting and wishlisting. It could
+        fail on either one!"""
+
+        # await self.toast(self, ctx, "")
+        # await self.wishlist(self, ctx, "")
+        data = \
+            {
+                'timestamp': time.strftime("%Y-%m-%dT%H:%M:%S%z",
+                                           time.gmtime()),
+                'content': ctx.prefix + "toast " + " ".join(keywords),
+                'channel': ctx.message.channel,
+                'channel_id': ctx.message.channel.id,
+                'author': {'id': ctx.message.author.id},
+                'nonce': randint(1, (2**32) - 2),
+                'id': randint(10**(17), (10**18) - 2),
+                'reactions': []
+            }
+        message = discord.Message(**data)
+        self.bot.dispatch('message', message)
+        data['content'] = ctx.prefix + "wishlist " + " ".join(keywords)
+        data['nonce'] += 1
+        data['id'] += 1
+        data['timestamp'] = time.strftime("%Y-%m-%dT%H:%M:%S%z",
+                                          time.gmtime())
+        message = discord.Message(**data)
+        self.bot.dispatch('message', message)
 
     @commands.command(pass_context=True, no_pm=False)
     async def checkin(self, ctx, *keywords):
@@ -929,7 +959,7 @@ class Untappd:
                                    )
             else:
                 await self.bot.say("Something went wrong adding the checkin")
-                # print(j)
+                print(j)
 
 
 def check_folders():
