@@ -29,6 +29,7 @@ class Untappd:
         if "moderator_emoji" not in self.settings:
             self.settings["moderator_emoji"] = ":crown:"
         self.session = aiohttp.ClientSession()
+        self.channels = {}
         self.emoji = {
                 1: "1⃣",
                 2: "2⃣",
@@ -42,9 +43,10 @@ class Untappd:
                 10: "🔟",
                 "beers": "🍻",
                 "beer": "🍺",
-                "comments": "💬"
+                "comments": "💬",
+                "right": "➡",
+                "left": "⬅"
         }
-        self.channels = {}
 
     # invaild syntax?
     @commands.group(no_pm=False, invoke_without_command=False,
@@ -222,9 +224,11 @@ class Untappd:
         """Requires that you've authorized the bot.
         Adds a beer to or removes a beer from your wishlist.
         If you privde a beer id, that's used.
-        Otherwise it's the first search result"""
+        Otherwise it's the first search result
+        or the last beer shared in the channel"""
 
         me = self.bot
+        beerid = 0
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
@@ -239,15 +243,26 @@ class Untappd:
         if keywords:
             keywords = "+".join(keywords)
         else:
-            await self.bot.send_cmd_help(ctx)
-            return
+            channel = ctx.message.channel.id
+            if channel in self.channels:
+                if self.channels[channel]:
+                    if "beer" in self.channels[channel]:
+                        beerid = self.channels[channel]["beer"]
+            if not beerid:
+                await self.bot.send_cmd_help(ctx)
+                return
 
         await self.bot.send_typing(ctx.message.channel)
-        if keywords.isdigit():
+        if not beerid and keywords.isdigit():
             beerid = keywords
-        else:
+        elif not beerid:
             beers = await searchBeer(ctx, keywords, limit=1)
-            beerid = beers["items"][0]["beer"]["bid"]
+            if 0 in beers["items"]:
+                beerid = beers["items"][0]["beer"]["bid"]
+            else:
+                await self.bot.say("I'm afraid `{!s}` was not found".format(
+                    keywords
+                ))
 
         if beerid:
             # Attempt to add to the wishlist
@@ -371,8 +386,8 @@ class Untappd:
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer(self, ctx, *keywords):
-        """Search Untappd.com using the API"""
-        """A search uses characters, a lookup uses numbers"""
+        """Search Untappd.com for a beer. Provide a number and it'll
+        look up that beer"""
         embed = False
         beer_list = []
         resultStr = ""
@@ -568,7 +583,8 @@ class Untappd:
             channel = ctx.message.channel.id
             if channel in self.channels:
                 if self.channels[channel]:
-                    checkin = self.channels[channel]
+                    if "checkin" in self.channels[channel]:
+                        checkin = self.channels[channel]["checkin"]
 
         if not checkin:
             await self.bot.say("I haven't seen a checkin for this channel "
@@ -749,6 +765,7 @@ class Untappd:
         """Add a checkin to the spreadsheet. Defaults to last one"""
 
         author = ctx.message.author
+        url = ""
         if ctx.message.server:
             guild = str(ctx.message.server.id)
             if "project_url" in self.settings[guild]:
@@ -767,7 +784,7 @@ class Untappd:
 
         await self.bot.send_typing(ctx.message.channel)
         if not url:
-            await self.bot.say("Looks like there are not projects right now")
+            await self.bot.say("Looks like there are no projects right now")
             return
 
         # Get the information needed for the form, starting with checkin id
@@ -1003,6 +1020,10 @@ async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
     if (not beer or isinstance(beer, str)):
         return embedme("Problem looking up a beer by id")
     embed = beer_to_embed(beer)
+    channel = ctx.message.channel.id
+    if channel not in self.channels:
+        self.channels[channel] = {}
+    self.channels[channel]["beer"] = beer["bid"]
     return embed
 
 
@@ -1070,7 +1091,7 @@ def beer_to_embed(beer, rating=None, list_size=5):
         if beer["checkins"]["count"]:
             last_seen = time_ago(beer["checkins"]["items"][0]["created_at"],
                                  long=True)
-    embed.add_field(name="Last Seen", value=last_seen, inline=True)
+        embed.add_field(name="Last Seen", value=last_seen, inline=True)
 
     footer_str = "Beer {!s} ".format(beerid)
     prod_str = ""
@@ -1300,7 +1321,7 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
                     beer['beer']['auth_rating']
                 )
             elif beer['have_had']:
-                resultStr += " (\*)"
+                resultStr += ' (\*)'
             resultStr += "\n"
             beer_list.append(beer['beer']['bid'])
             if firstnum == 1:
@@ -1409,7 +1430,7 @@ and a checkin list"""
 
 
 async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
-                     type: str = "beer"):
+                     type: str = "beer", paging: bool = False):
     """Says the message with the embed and adds menu for reactions"""
     emoji = []
     limit = list_size(self, ctx.message.server)
@@ -1571,7 +1592,10 @@ async def checkin_to_embed(self, ctx, checkin):
                      .format(checkin["checkin_id"],
                              checkin["beer"]["bid"]))
     channel = ctx.message.channel.id
-    self.channels[channel] = checkin["checkin_id"]
+    if channel not in self.channels:
+        self.channels[channel] = {}
+    self.channels[channel]["checkin"] = checkin["checkin_id"]
+    self.channels[channel]["beer"] = checkin["beer"]["bid"]
 
     return embed
 
