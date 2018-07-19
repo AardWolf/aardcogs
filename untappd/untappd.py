@@ -8,6 +8,8 @@ import os
 import urllib.parse
 from __main__ import send_cmd_help
 from datetime import datetime, timezone
+import time
+from random import randint
 
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
@@ -219,6 +221,106 @@ class Untappd:
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.say(response)
 
+    @untappd.command(pass_context=True, no_pm=False)
+    async def friend(self, ctx, profile: str = None):
+        """Accepts existing friend requests from user specified or
+        sends a friend request to the user specified"""
+
+        keys = getAuth(ctx)
+        if "access_token" not in keys:
+            await self.bot.say("You must first authorize me to act as you"
+                               " using `untappd authme`")
+            return
+
+        author = ctx.message.author
+        if ctx.message.server:
+            guild = str(ctx.message.server.id)
+        else:
+            guild = 0
+
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information "
+                               "and should use the `untappd_apikey` command")
+            return
+
+        if ctx.message.mentions:
+            # If user has set a nickname, use that - but only if it's not a PM
+            if ctx.message.server:
+                user = ctx.message.mentions[0]
+                try:
+                    profile = self.settings[guild][user.id]["nick"]
+                except KeyError:
+                    profile = user.display_name
+
+        if not profile:
+            await self.bot.say("Friend who? Give me a name!")
+            return
+        await self.bot.send_typing(ctx.message.channel)
+        qstr = urllib.parse.urlencode(keys)
+        # This will be needed several times
+        # First get the UID for the profile
+        uid = 0
+        url = ("https://api.untappd.com/v4/user/info/{!s}?{!s}"
+               ).format(profile, qstr)
+        async with self.session.get(url) as resp:
+            if resp.status == 200:
+                j = await resp.json()
+                if "user" in j['response']:
+                    uid = j['response']['user']['uid']
+                else:
+                    await self.bot.say("Could not look up that user")
+                    return
+            else:
+                await self.bot.say("I was unable to look up " + profile)
+                return
+        if not uid:
+            await self.bot.say("Sorry, I couldn't get a uid for " + profile)
+            return
+        # Step 2: Accept any pending requests
+        url = ("https://api.untappd.com/v4/friend/accept/{!s}?{!s}"
+               ).format(uid, qstr)
+        async with self.session.get(url) as resp:
+            if resp.status == 200:
+                # This is probably the case where it worked!
+                j = await resp.json()
+                if "target_user" in j['response']:
+                    response_str = (
+                        "You accepted a friend request from {!s}!"
+                        " Now you can toast them and stalk them better."
+                        ).format(j['response']['target_user']['user_name'])
+                    await self.bot.say(response_str)
+                else:
+                    response_str = "I think you accepted a request "
+                    response_str += "but I didn't get the answer I expected"
+                    await self.bot.say(response_str)
+                return
+        # Send a request. Even if they're already friends
+        url = ("https://api.untappd.com/v4/friend/request/{!s}?{!s}"
+               ).format(uid, qstr)
+        async with self.session.get(url) as resp:
+            j = await resp.json()
+            if resp.status == 200:
+                response_str = ""
+                if "target_user" in j['response']:
+                    response_str = (
+                        "You sent a request to {!s}. The ball is in "
+                        "their court now."
+                    ).format(j['response']['target_user']['user_name'])
+                else:
+                    response_str = "I think you sent a request but I "
+                    response_str += "didn't get the response I expected"
+                await self.bot.say(response_str)
+            else:
+                if "meta" in j:
+                    response_str = (
+                        "I got an error sending a request to that person. "
+                        "I blame you for that error. (Specifically: {!s})"
+                    ).format(j["meta"]["error_detail"])
+                else:
+                    response_str = "Something went horribly wrong."
+                await self.bot.say(response_str)
+                # print("{!s}".format(j))
+
     @commands.command(pass_context=True, no_pm=False)
     async def wishlist(self, ctx, *keywords):
         """Requires that you've authorized the bot.
@@ -285,8 +387,6 @@ class Untappd:
                     await me.say("Beer added to wishlist", embed=embed)
                     return
                 elif resp.status == 500:
-                    print("That didn't quite work with '" + url + "'")
-                    print(resp)
                     url = ("https://api.untappd.com/v4/user/wishlist/"
                            "delete?{!s}").format(qstr)
                     async with self.session.get(url) as unwl:
@@ -929,7 +1029,7 @@ class Untappd:
                                    )
             else:
                 await self.bot.say("Something went wrong adding the checkin")
-                # print(j)
+                print(j)
 
 
 def check_folders():
