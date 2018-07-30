@@ -1233,7 +1233,8 @@ async def toastIt(ctx, checkin: int, auth_token: str = None):
             j = await resp.json()
         elif resp.status == 500:
             return ("Toast failed, probably because you "
-                    "aren't friends with this person.")
+                    "aren't friends with this person. Fix this by using "
+                    "`untappd friend <person>`")
         else:
             print("Lookup failed for url: "+url)
             return ("Toast failed with {!s}").format(resp.status)
