@@ -434,8 +434,14 @@ class Untappd:
             beerid = keywords
         else:
             beers = await searchBeer(ctx, keywords, limit=1)
-            beerid = beers["items"][0]["beer"]["bid"]
-            set_beer_id = True
+            if 0 in beers["items"]:
+                beerid = beers["items"][0]["beer"]["bid"]
+                set_beer_id = True
+            else:
+                await self.bot.say(("Lookup of `{!s}` failed. So no, "
+                                    "you haven't"
+                                    ).format(keywords))
+                return
 
         if beerid:
             beer = await get_beer_by_id(self, ctx, beerid)
