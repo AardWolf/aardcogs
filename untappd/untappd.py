@@ -964,6 +964,11 @@ class Untappd:
         username = checkin["user"]["user_name"]
         rating = checkin["rating_score"]
         comment = checkin["checkin_comment"]
+        checkin_date = checkin["created_at"]
+
+        beer = await get_beer_by_id(self, ctx, beer_id)
+        avg_rating = beer["rating_score"]
+        total_checkins = beer["stats"]["total_user_count"]
 
         payload = {
             "action": "drank",
@@ -975,6 +980,9 @@ class Untappd:
             "brewery": brewery,
             "username": username,
             "rating": rating,
+            "avg_rating": avg_rating,
+            "total_checkins": total_checkins,
+            "checkin_date": checkin_date,
             "comment": comment
         }
         async with self.session.post(url, data=payload) as resp:
@@ -1391,7 +1399,7 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
 
     returnStr = ""
     list_limit = limit or list_size(ctx.cog, None)
-    resultStr = "You search returned {!s} beers:\n".format(
+    resultStr = "Your search returned {!s} beers:\n".format(
         beers["count"]
     )
     beer_list = []
