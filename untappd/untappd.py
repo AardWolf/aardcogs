@@ -367,7 +367,7 @@ class Untappd:
                 return
             beerid = keywords
         elif not beerid:
-            beers = await searchBeer(ctx, keywords, limit=1)
+            beers = await searchBeer(self, ctx, keywords, limit=1)
             if isinstance(beers["items"], list):
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
@@ -444,7 +444,7 @@ class Untappd:
         if keywords.isdigit():
             beerid = keywords
         else:
-            beers = await searchBeer(ctx, keywords, limit=1)
+            beers = await searchBeer(self, ctx, keywords, limit=1)
             if 0 in beers["items"]:
                 beerid = beers["items"][0]["beer"]["bid"]
                 set_beer_id = True
@@ -636,7 +636,7 @@ class Untappd:
             profile = author.display_name
             print("Using '{}'".format(profile))
         await self.bot.send_typing(ctx.message.channel)
-        results = await profileLookup(self, profile,
+        results = await profileLookup(self, ctx, profile,
                                       limit=list_size(self,
                                                       ctx.message.server))
         if isinstance(results, dict):
@@ -709,7 +709,8 @@ class Untappd:
                                "which to toast.")
             return
 
-        embed = await toastIt(self, ctx, checkin=checkin, auth_token=auth_token)
+        embed = await toastIt(self, ctx, checkin=checkin,
+                              auth_token=auth_token)
         if isinstance(embed, str):
             await self.bot.say(embed)
         else:
@@ -1290,21 +1291,18 @@ async def getCheckin(self, ctx, checkin: int, auth_token: str = None):
         checkin, qstr
     )
 
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        else:
-            # print("Lookup failed for url: "+url)
-            return ("Lookup failed with {!s}").format(resp.status)
-
-    if j["meta"]["code"] != 200:
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp['meta']['code'] != 200:
         # print("Lookup failed for url: "+url)
         return ("Lookup failed with {!s} - {!s}").format(
-            j["meta"]["code"],
-            j["meta"]["error_detail"])
+            resp["meta"]["code"],
+            resp["meta"]["error_detail"])
 
-    user_checkin = j["response"]["checkin"]
-    return await checkin_to_embed(self, ctx, user_checkin)
+    if "response" in resp:
+        if "checkin" in resp["response"]:
+            user_checkin = resp["response"]["checkin"]
+            return await checkin_to_embed(self, ctx, user_checkin)
+    return embedme("Unplanned for error looking up checkin")
 
 
 async def getCheckins(self, ctx, profile: str = None,
@@ -1336,25 +1334,19 @@ async def getCheckins(self, ctx, profile: str = None,
         profile, qstr
     )
     # print("Looking up: {!s}".format(url))
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        else:
-            # print("Lookup failed for url: "+url)
-            return ("Lookup failed with {!s}").format(resp.status)
-
-    if j["meta"]["code"] != 200:
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp["meta"]["code"] != 200:
         # print("Lookup failed for url: "+url)
         return ("Lookup failed with {!s} - {!s}").format(
-            j["meta"]["code"],
-            j["meta"]["error_detail"]
+            resp["meta"]["code"],
+            resp["meta"]["error_detail"]
             )
 
-    if j["response"]["checkins"]["count"] == 1:
-        embed = await checkin_to_embed(self, ctx,
-                                       j["response"]["checkins"]["items"][0])
-    elif j["response"]["checkins"]["count"] > 1:
-        checkins = j["response"]["checkins"]["items"]
+    if resp["response"]["checkins"]["count"] == 1:
+        embed = await checkin_to_embed(
+            self, ctx, resp["response"]["checkins"]["items"][0])
+    elif resp["response"]["checkins"]["count"] > 1:
+        checkins = resp["response"]["checkins"]["items"]
         checkinStr = checkins_to_string(self, count, checkins)
         checkinList = checkins
         embed = discord.Embed(title=profile, description=checkinStr[:2048])
@@ -1366,7 +1358,7 @@ async def getCheckins(self, ctx, profile: str = None,
     return result
 
 
-async def searchBeer(ctx, query, limit=None, rating=None):
+async def searchBeer(self, ctx, query, limit=None, rating=None):
     """Given a query string and some other
     information returns an embed of results"""
 
@@ -1377,26 +1369,11 @@ async def searchBeer(ctx, query, limit=None, rating=None):
 
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
 #    print(url)
-    try:
-        async with ctx.cog.session.get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            else:
-                return ("Beer search failed with code "
-                        + str(resp.status))
-
-        # Confirm success
-        if j['meta']['code'] == 200:
-            return j['response']['beers']
-        else:
-            return "Found no beers but got no errors"
-    except (aiohttp.errors.ClientResponseError,
-            aiohttp.errors.ClientRequestError,
-            aiohttp.errors.ClientOSError,
-            aiohttp.errors.ClientDisconnectedError,
-            aiohttp.errors.ClientTimeoutError,
-            aiohttp.errors.HttpProcessingError) as exc:
-        return "Search failed with {%s}".format(exc)
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp["meta"]["code"] != 200:
+        return resp['response']['beers']
+    else:
+        return "Found no beers but got no errors"
 
 
 async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
@@ -1460,7 +1437,7 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
     return (result)
 
 
-async def profileLookup(self, profile, limit=5):
+async def profileLookup(self, ctx, profile, limit=5):
     """Looks up a profile in untappd by username"""
     query = urllib.parse.quote_plus(profile)
     embed = False
@@ -1474,25 +1451,21 @@ async def profileLookup(self, profile, limit=5):
 
     # TODO: Honor is_private flag on private profiles.
 
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        elif resp.status == 404:
-            return "The profile '{!s}' does not exist".format(profile)
-        elif resp.status == 500:
-            return "The untappd server is having an error"
-        else:
-            print("Failed for url: " + url)
-            return "Profile query failed with code {!s}".format(resp.status)
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp["meta"]["code"] == 400:
+        return "The profile '{!s}' does not exist".format(profile)
+    else:
+        print("Failed for url: " + url)
+        return "Profile query failed with code {!s} - {!s}".format(
+            resp["meta"]["code"], resp["meta"]["error_detail"])
 
-#        print (json.dumps(j['response'],indent=4))
-        if j['meta']['code'] == 200:
-            (embed, beerList) = user_to_embed(self, j['response']['user'],
-                                              limit)
-        else:
-            embed = discord.Embed(
-                title="No user found",
-                description="Search for " + profile + " resulted in no users")
+    if resp['meta']['code'] == 200:
+        (embed, beerList) = user_to_embed(self, resp['response']['user'],
+                                          limit)
+    else:
+        embed = discord.Embed(
+            title="No user found",
+            description="Search for " + profile + " resulted in no users")
 
     result = dict()
     result["embed"] = embed
