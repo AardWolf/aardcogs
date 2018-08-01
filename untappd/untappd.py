@@ -445,7 +445,13 @@ class Untappd:
             beerid = keywords
         else:
             beers = await searchBeer(self, ctx, keywords, limit=1)
-            if 0 in beers["items"]:
+            if isinstance(beers, str):
+                await self.bot.say(
+                    ("Lookup of `{!s}` didn't result in a beer list: {!s}").
+                    format(keywords, beers)
+                    )
+                return
+            elif isinstance(beers["items"], list):
                 beerid = beers["items"][0]["beer"]["bid"]
                 set_beer_id = True
             else:
@@ -526,7 +532,7 @@ class Untappd:
             embed = await lookupBeer(self, ctx, keywords, list_size=1)
             # await self.bot.say( embed=embed)
         else:
-            results = await searchBeer_to_embed(ctx, keywords,
+            results = await searchBeer_to_embed(self, ctx, keywords,
                                                 limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
@@ -536,7 +542,9 @@ class Untappd:
                 embed = results
             # await self.bot.say(resultStr, embed=embed)
 
-        if embed:
+        if isinstance(embed, str):
+            message = await self.bot.say(embed)
+        elif embed:
             message = await self.bot.say(resultStr, embed=embed)
         else:
             message = await self.bot.say(resultStr)
@@ -549,7 +557,8 @@ class Untappd:
         embed = False
         resultStr = ""
         await self.bot.send_typing(ctx.message.channel)
-        results = await searchBeer_to_embed(ctx, " ".join(keywords), limit=1)
+        results = await searchBeer_to_embed(self, ctx, " ".join(keywords),
+                                            limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
             await self.bot.say(resultStr, embed=embed)
@@ -1139,7 +1148,7 @@ async def get_beer_by_id(self, ctx, beerid):
         )
 
 
-async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
+async def lookupBeer(self, ctx, beerid: int, rating=None, list_size=5):
     """Look up a beer by id, returns an embed"""
 
     beer = await get_beer_by_id(self, ctx, beerid)
@@ -1370,15 +1379,17 @@ async def searchBeer(self, ctx, query, limit=None, rating=None):
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
 #    print(url)
     resp = await get_data_from_untappd(self, ctx, url)
-    if resp["meta"]["code"] != 200:
+    if resp["meta"]["code"] == 200:
         return resp['response']['beers']
     else:
-        return "Found no beers but got no errors"
+        return ("Search for `{!s}` resulted in {!s}: {!s}".
+                format(query, resp["meta"]["code"],
+                       resp["meta"]["error_detail"]))
 
 
-async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
+async def searchBeer_to_embed(self, ctx, query, limit=None, rating=None):
     """Searches for a beer and returns an embed"""
-    beers = await searchBeer(ctx, query, limit, rating)
+    beers = await searchBeer(self, ctx, query, limit, rating)
     if isinstance(beers, str):
         # I'm not sure what happens when a naked embed gets returned.
         # return embedme(beers)
