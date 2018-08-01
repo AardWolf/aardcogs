@@ -434,8 +434,14 @@ class Untappd:
             beerid = keywords
         else:
             beers = await searchBeer(ctx, keywords, limit=1)
-            beerid = beers["items"][0]["beer"]["bid"]
-            set_beer_id = True
+            if 0 in beers["items"]:
+                beerid = beers["items"][0]["beer"]["bid"]
+                set_beer_id = True
+            else:
+                await self.bot.say(("Lookup of `{!s}` failed. So no, "
+                                    "you haven't"
+                                    ).format(keywords))
+                return
 
         if beerid:
             beer = await get_beer_by_id(self, ctx, beerid)
@@ -964,6 +970,11 @@ class Untappd:
         username = checkin["user"]["user_name"]
         rating = checkin["rating_score"]
         comment = checkin["checkin_comment"]
+        checkin_date = checkin["created_at"]
+
+        beer = await get_beer_by_id(self, ctx, beer_id)
+        avg_rating = beer["rating_score"]
+        total_checkins = beer["stats"]["total_user_count"]
 
         payload = {
             "action": "drank",
@@ -975,6 +986,9 @@ class Untappd:
             "brewery": brewery,
             "username": username,
             "rating": rating,
+            "avg_rating": avg_rating,
+            "total_checkins": total_checkins,
+            "checkin_date": checkin_date,
             "comment": comment
         }
         async with self.session.post(url, data=payload) as resp:
@@ -1233,7 +1247,8 @@ async def toastIt(ctx, checkin: int, auth_token: str = None):
             j = await resp.json()
         elif resp.status == 500:
             return ("Toast failed, probably because you "
-                    "aren't friends with this person.")
+                    "aren't friends with this person. Fix this by using "
+                    "`untappd friend <person>`")
         else:
             print("Lookup failed for url: "+url)
             return ("Toast failed with {!s}").format(resp.status)
@@ -1390,7 +1405,7 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
 
     returnStr = ""
     list_limit = limit or list_size(ctx.cog, None)
-    resultStr = "You search returned {!s} beers:\n".format(
+    resultStr = "Your search returned {!s} beers:\n".format(
         beers["count"]
     )
     beer_list = []
