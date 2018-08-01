@@ -368,7 +368,7 @@ class Untappd:
             beerid = keywords
         elif not beerid:
             beers = await searchBeer(self, ctx, keywords, limit=1)
-            if isinstance(beers["items"], list):
+            if isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
                 await self.bot.say("I'm afraid `{!s}` was not found".format(
@@ -451,7 +451,7 @@ class Untappd:
                     format(keywords, beers)
                     )
                 return
-            elif isinstance(beers["items"], list):
+            elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
                 set_beer_id = True
             else:
@@ -860,8 +860,6 @@ class Untappd:
             return
 
         await self.bot.send_typing(ctx.message.channel)
-        set_beer_id = False
-        await self.bot.send_typing(ctx.message.channel)
         if keywords.isdigit():
             beerid = keywords
         else:
@@ -872,7 +870,7 @@ class Untappd:
                     format(keywords, beers)
                     )
                 return
-            elif isinstance(beers["items"], list):
+            elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
                 await self.bot.say(("Lookup of `{!s}` failed. So no, "
