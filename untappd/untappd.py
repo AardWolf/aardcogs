@@ -434,7 +434,7 @@ class Untappd:
             return
 
         if keywords:
-            keywords = "+".join(keywords)
+            keywords = " ".join(keywords)
         else:
             await self.bot.send_cmd_help(ctx)
             return
@@ -838,8 +838,8 @@ class Untappd:
         return
 
     @commands.command(pass_context=True, no_pm=False)
-    async def ifound(self, ctx, bid: int):
-        """Add a found beer to the spreadsheet. Accepts a beer id"""
+    async def ifound(self, ctx, *keywords):
+        """Add a found beer to the spreadsheet. Beer id or search"""
 
         author = ctx.message.author
         if ctx.message.server:
@@ -853,17 +853,49 @@ class Untappd:
         else:
             profile = author.display_name
 
+        if keywords:
+            keywords = " ".join(keywords)
+        else:
+            await self.bot.send_cmd_help(ctx)
+            return
+
         await self.bot.send_typing(ctx.message.channel)
+        set_beer_id = False
+        await self.bot.send_typing(ctx.message.channel)
+        if keywords.isdigit():
+            beerid = keywords
+        else:
+            beers = await searchBeer(self, ctx, keywords, limit=1)
+            if isinstance(beers, str):
+                await self.bot.say(
+                    ("Lookup of `{!s}` didn't result in a beer list: {!s}").
+                    format(keywords, beers)
+                    )
+                return
+            elif isinstance(beers["items"], list):
+                beerid = beers["items"][0]["beer"]["bid"]
+            else:
+                await self.bot.say(("Lookup of `{!s}` failed. So no, "
+                                    "you haven't"
+                                    ).format(keywords))
+                return
+
+        if beerid:
+            beer = await get_beer_by_id(self, ctx, beerid)
+            if isinstance(beer, str):
+                await self.bot.say(beer)
+                return
+
         if not url:
             await self.bot.say("Looks like there are no projects right now")
             return
-        beer = await get_beer_by_id(self, ctx, bid)
+        beer = await get_beer_by_id(self, ctx, beerid)
         if (isinstance(beer, str)):
             # This happens in error situations
             await self.bot.say(beer)
             return
         keys = {
-            "bid": bid,
+            "bid": beerid,
             "username": profile,
             "beer_name": "{!s} from {!s}".format(
                 beer["beer_name"], beer["brewery"]["brewery_name"]
@@ -878,7 +910,7 @@ class Untappd:
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                embed = await lookupBeer(self, ctx, bid)
+                embed = await lookupBeer(self, ctx, beerid)
                 if not embed:
                     await self.bot.say("{!s} added!".format(keys["beer_name"]))
                 else:
