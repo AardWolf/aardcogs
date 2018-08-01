@@ -8,8 +8,6 @@ import os
 import urllib.parse
 from __main__ import send_cmd_help
 from datetime import datetime, timezone
-import time
-from random import randint
 
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
@@ -232,7 +230,6 @@ class Untappd:
                                " using `untappd authme`")
             return
 
-        author = ctx.message.author
         if ctx.message.server:
             guild = str(ctx.message.server.id)
         else:
@@ -262,16 +259,19 @@ class Untappd:
         uid = 0
         url = ("https://api.untappd.com/v4/user/info/{!s}?{!s}"
                ).format(profile, qstr)
-        async with self.session.get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
+        j = await get_data_from_untappd(self, ctx, url)
+        if "meta" in j:
+            if j["meta"]["code"] == "200":
                 if "user" in j['response']:
                     uid = j['response']['user']['uid']
                 else:
                     await self.bot.say("Could not look up that user")
                     return
             else:
-                await self.bot.say("I was unable to look up " + profile)
+                await self.bot.say(
+                    ("I was unable to look up {!s}: {!s} / {!s}").format(
+                        profile, j["meta"]["code"], j["meta"]["error_detail"]
+                    ))
                 return
         if not uid:
             await self.bot.say("Sorry, I couldn't get a uid for " + profile)
@@ -279,10 +279,10 @@ class Untappd:
         # Step 2: Accept any pending requests
         url = ("https://api.untappd.com/v4/friend/accept/{!s}?{!s}"
                ).format(uid, qstr)
-        async with self.session.get(url) as resp:
-            if resp.status == 200:
+        j = await get_data_from_untappd(self, ctx, url)
+        if "meta" in j:
+            if j["meta"]["code"] == "200":
                 # This is probably the case where it worked!
-                j = await resp.json()
                 if "target_user" in j['response']:
                     response_str = (
                         "You accepted a friend request from {!s}!"
@@ -297,9 +297,9 @@ class Untappd:
         # Send a request. Even if they're already friends
         url = ("https://api.untappd.com/v4/friend/request/{!s}?{!s}"
                ).format(uid, qstr)
-        async with self.session.get(url) as resp:
-            j = await resp.json()
-            if resp.status == 200:
+        j = await get_data_from_untappd(self, ctx, url)
+        if "meta" in j:
+            if j["meta"]["code"] == "200":
                 response_str = ""
                 if "target_user" in j['response']:
                     response_str = (
@@ -307,8 +307,12 @@ class Untappd:
                         "their court now."
                     ).format(j['response']['target_user']['user_name'])
                 else:
-                    response_str = "I think you sent a request but I "
-                    response_str += "didn't get the response I expected"
+                    response_str = (
+                        "I think you sent a request but I "
+                        "didn't get the response I expected: {!s} / {!s}"
+                        ).format(
+                            j["meta"]["code"], j["meta"]["error_detail"]
+                        )
                 await self.bot.say(response_str)
             else:
                 if "meta" in j:
@@ -343,7 +347,7 @@ class Untappd:
             return
 
         if keywords:
-            keywords = "+".join(keywords)
+            keywords = " ".join(keywords)
         else:
             channel = ctx.message.channel.id
             if channel in self.channels:
@@ -356,10 +360,15 @@ class Untappd:
 
         await self.bot.send_typing(ctx.message.channel)
         if not beerid and keywords.isdigit():
+            beer = await get_beer_by_id(self, ctx, keywords)
+            if isinstance(beer, str):
+                await self.bot.say("Wishlist add failed - {!s}".
+                                   format(beer))
+                return
             beerid = keywords
         elif not beerid:
-            beers = await searchBeer(ctx, keywords, limit=1)
-            if 0 in beers["items"]:
+            beers = await searchBeer(self, ctx, keywords, limit=1)
+            if isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
                 await self.bot.say("I'm afraid `{!s}` was not found".format(
@@ -378,20 +387,20 @@ class Untappd:
                    ).format(qstr)
             # print("Using URL: {!s}".format(url))
 
-            async with self.session.get(url) as resp:
-                if resp.status == 200:
-                    j = await resp.json()
+            j = await get_data_from_untappd(self, ctx, url)
+            if "meta" in j:
+                if int(j["meta"]["code"]) == 200:
                     beer = j['response']['beer']['beer']
                     beer['brewery'] = j['response']['beer']['brewery']
                     embed = beer_to_embed(beer)
                     await me.say("Beer added to wishlist", embed=embed)
                     return
-                elif resp.status == 500:
+                elif int(j["meta"]["code"]) == 500:
                     url = ("https://api.untappd.com/v4/user/wishlist/"
                            "delete?{!s}").format(qstr)
-                    async with self.session.get(url) as unwl:
-                        if unwl.status == 200:
-                            j = await unwl.json()
+                    j = await get_data_from_untappd(self, ctx, url)
+                    if "meta" in j:
+                        if int(j["meta"]["code"]) == 200:
                             beer = j['response']['beer']['beer']
                             beer['brewery'] = j['response']['beer']['brewery']
                             embed = beer_to_embed(beer)
@@ -399,9 +408,11 @@ class Untappd:
                                          embed=embed)
                         else:
                             print("That didn't quite work with '" + url + "'")
-                            print(unwl)
                             await me.say("I tried adding it, I tried removing"
                                          "it. Nothing I tried worked")
+                else:
+                    await me.say("Weird, got code {!s}".
+                                 format(j["meta"]["code"]))
         else:
             await me.say("I was unable to find such a beer, sorry")
 
@@ -423,7 +434,7 @@ class Untappd:
             return
 
         if keywords:
-            keywords = "+".join(keywords)
+            keywords = " ".join(keywords)
         else:
             await self.bot.send_cmd_help(ctx)
             return
@@ -433,8 +444,14 @@ class Untappd:
         if keywords.isdigit():
             beerid = keywords
         else:
-            beers = await searchBeer(ctx, keywords, limit=1)
-            if 0 in beers["items"]:
+            beers = await searchBeer(self, ctx, keywords, limit=1)
+            if isinstance(beers, str):
+                await self.bot.say(
+                    ("Lookup of `{!s}` didn't result in a beer list: {!s}").
+                    format(keywords, beers)
+                    )
+                return
+            elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
                 set_beer_id = True
             else:
@@ -515,7 +532,7 @@ class Untappd:
             embed = await lookupBeer(self, ctx, keywords, list_size=1)
             # await self.bot.say( embed=embed)
         else:
-            results = await searchBeer_to_embed(ctx, keywords,
+            results = await searchBeer_to_embed(self, ctx, keywords,
                                                 limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
@@ -525,7 +542,9 @@ class Untappd:
                 embed = results
             # await self.bot.say(resultStr, embed=embed)
 
-        if embed:
+        if isinstance(embed, str):
+            message = await self.bot.say(embed)
+        elif embed:
             message = await self.bot.say(resultStr, embed=embed)
         else:
             message = await self.bot.say(resultStr)
@@ -538,7 +557,8 @@ class Untappd:
         embed = False
         resultStr = ""
         await self.bot.send_typing(ctx.message.channel)
-        results = await searchBeer_to_embed(ctx, " ".join(keywords), limit=1)
+        results = await searchBeer_to_embed(self, ctx, " ".join(keywords),
+                                            limit=1)
         if isinstance(results, dict):
             embed = results["embed"]
             await self.bot.say(resultStr, embed=embed)
@@ -625,7 +645,7 @@ class Untappd:
             profile = author.display_name
             print("Using '{}'".format(profile))
         await self.bot.send_typing(ctx.message.channel)
-        results = await profileLookup(self, profile,
+        results = await profileLookup(self, ctx, profile,
                                       limit=list_size(self,
                                                       ctx.message.server))
         if isinstance(results, dict):
@@ -698,7 +718,8 @@ class Untappd:
                                "which to toast.")
             return
 
-        embed = await toastIt(ctx, checkin=checkin, auth_token=auth_token)
+        embed = await toastIt(self, ctx, checkin=checkin,
+                              auth_token=auth_token)
         if isinstance(embed, str):
             await self.bot.say(embed)
         else:
@@ -817,8 +838,8 @@ class Untappd:
         return
 
     @commands.command(pass_context=True, no_pm=False)
-    async def ifound(self, ctx, bid: int):
-        """Add a found beer to the spreadsheet. Accepts a beer id"""
+    async def ifound(self, ctx, *keywords):
+        """Add a found beer to the spreadsheet. Beer id or search"""
 
         author = ctx.message.author
         if ctx.message.server:
@@ -832,17 +853,47 @@ class Untappd:
         else:
             profile = author.display_name
 
+        if keywords:
+            keywords = " ".join(keywords)
+        else:
+            await self.bot.send_cmd_help(ctx)
+            return
+
         await self.bot.send_typing(ctx.message.channel)
+        if keywords.isdigit():
+            beerid = keywords
+        else:
+            beers = await searchBeer(self, ctx, keywords, limit=1)
+            if isinstance(beers, str):
+                await self.bot.say(
+                    ("Lookup of `{!s}` didn't result in a beer list: {!s}").
+                    format(keywords, beers)
+                    )
+                return
+            elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
+                beerid = beers["items"][0]["beer"]["bid"]
+            else:
+                await self.bot.say(("Lookup of `{!s}` failed. So no, "
+                                    "you haven't"
+                                    ).format(keywords))
+                return
+
+        if beerid:
+            beer = await get_beer_by_id(self, ctx, beerid)
+            if isinstance(beer, str):
+                await self.bot.say(beer)
+                return
+
         if not url:
             await self.bot.say("Looks like there are no projects right now")
             return
-        beer = await get_beer_by_id(self, ctx, bid)
+        beer = await get_beer_by_id(self, ctx, beerid)
         if (isinstance(beer, str)):
             # This happens in error situations
             await self.bot.say(beer)
             return
         keys = {
-            "bid": bid,
+            "bid": beerid,
             "username": profile,
             "beer_name": "{!s} from {!s}".format(
                 beer["beer_name"], beer["brewery"]["brewery_name"]
@@ -857,7 +908,7 @@ class Untappd:
                 return "Query failed with code " + str(resp.status)
 
             if j['result'] == "success":
-                embed = await lookupBeer(self, ctx, bid)
+                embed = await lookupBeer(self, ctx, beerid)
                 if not embed:
                     await self.bot.say("{!s} added!".format(keys["beer_name"]))
                 else:
@@ -1117,22 +1168,24 @@ async def get_beer_by_id(self, ctx, beerid):
     url = "https://api.untappd.com/v4/beer/info/{!s}?{!s}".format(
         beerid, qstr
     )
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        else:
-            return "Query failed with code " + str(resp.status)
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp['meta']['code'] == 200:
+        return resp['response']['beer']
+    else:
+        return ("Query failed with code {!s}: {!s}").format(
+            resp['meta']['code'],
+            resp['meta']['error_detail']
+        )
 
-        if j['meta']['code'] == 200:
-            return j['response']['beer']
 
-
-async def lookupBeer(self, ctx, beerid, rating=None, list_size=5):
+async def lookupBeer(self, ctx, beerid: int, rating=None, list_size=5):
     """Look up a beer by id, returns an embed"""
 
     beer = await get_beer_by_id(self, ctx, beerid)
-    if (not beer or isinstance(beer, str)):
+    if not beer:
         return embedme("Problem looking up a beer by id")
+    elif isinstance(beer, str):
+        return embedme(beer)
     embed = beer_to_embed(beer)
     channel = ctx.message.channel.id
     if channel not in self.channels:
@@ -1225,10 +1278,9 @@ def beer_to_embed(beer, rating=None, list_size=5):
     return embed
 
 
-async def toastIt(ctx, checkin: int, auth_token: str = None):
+async def toastIt(self, ctx, checkin: int, auth_token: str = None):
     """Toast a specific checkin"""
 
-    me = ctx.cog
     keys = getAuth(ctx)
     # keys["client_id"] = self.settings["client_id"]
     # keys["access_token"] = auth_token
@@ -1242,33 +1294,25 @@ async def toastIt(ctx, checkin: int, auth_token: str = None):
     )
     # print("Using URL: {!s}".format(url))
 
-    async with me.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        elif resp.status == 500:
-            return ("Toast failed, probably because you "
-                    "aren't friends with this person. Fix this by using "
-                    "`untappd friend <person>`")
-        else:
-            print("Lookup failed for url: "+url)
-            return ("Toast failed with {!s}").format(resp.status)
-
-    if j["meta"]["code"] != 200:
-        # print("Lookup failed for url: "+url)
-        return ("Toast failed with {!s} - {!s}").format(
-            j["meta"]["code"],
-            j["meta"]["error_detail"])
-
-    if "result" in j["response"]:
-        if j["response"]["result"] == "success":
-            if j["response"]["like_type"] == "toast":
-                return "Toasted {!s}!".format(checkin)
-            elif j["response"]["like_type"] == "un-toast":
-                return "Toast rescinded from {!s}!".format(checkin)
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp['meta']['code'] == 500:
+        return ("Toast failed, probably because you "
+                "aren't friends with this person. Fix this by using "
+                "`untappd friend <person>`")
+    elif resp["meta"]["code"] == 200:
+        if "result" in resp["response"]:
+            if resp["response"]["result"] == "success":
+                if resp["response"]["like_type"] == "toast":
+                    return "Toasted {!s}!".format(checkin)
+                elif resp["response"]["like_type"] == "un-toast":
+                    return "Toast rescinded from {!s}!".format(checkin)
         else:
             return "Toast failed for some reason"
     else:
-        return "I didn't get an error but I didn't get confirmation either"
+        # print("Lookup failed for url: "+url)
+        return ("Toast failed with {!s} - {!s}").format(
+            resp["meta"]["code"],
+            resp["meta"]["error_detail"])
 
 
 async def getCheckin(self, ctx, checkin: int, auth_token: str = None):
@@ -1286,21 +1330,18 @@ async def getCheckin(self, ctx, checkin: int, auth_token: str = None):
         checkin, qstr
     )
 
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        else:
-            # print("Lookup failed for url: "+url)
-            return ("Lookup failed with {!s}").format(resp.status)
-
-    if j["meta"]["code"] != 200:
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp['meta']['code'] != 200:
         # print("Lookup failed for url: "+url)
         return ("Lookup failed with {!s} - {!s}").format(
-            j["meta"]["code"],
-            j["meta"]["error_detail"])
+            resp["meta"]["code"],
+            resp["meta"]["error_detail"])
 
-    user_checkin = j["response"]["checkin"]
-    return await checkin_to_embed(self, ctx, user_checkin)
+    if "response" in resp:
+        if "checkin" in resp["response"]:
+            user_checkin = resp["response"]["checkin"]
+            return await checkin_to_embed(self, ctx, user_checkin)
+    return embedme("Unplanned for error looking up checkin")
 
 
 async def getCheckins(self, ctx, profile: str = None,
@@ -1332,25 +1373,19 @@ async def getCheckins(self, ctx, profile: str = None,
         profile, qstr
     )
     # print("Looking up: {!s}".format(url))
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        else:
-            # print("Lookup failed for url: "+url)
-            return ("Lookup failed with {!s}").format(resp.status)
-
-    if j["meta"]["code"] != 200:
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp["meta"]["code"] != 200:
         # print("Lookup failed for url: "+url)
         return ("Lookup failed with {!s} - {!s}").format(
-            j["meta"]["code"],
-            j["meta"]["error_detail"]
+            resp["meta"]["code"],
+            resp["meta"]["error_detail"]
             )
 
-    if j["response"]["checkins"]["count"] == 1:
-        embed = await checkin_to_embed(self, ctx,
-                                       j["response"]["checkins"]["items"][0])
-    elif j["response"]["checkins"]["count"] > 1:
-        checkins = j["response"]["checkins"]["items"]
+    if resp["response"]["checkins"]["count"] == 1:
+        embed = await checkin_to_embed(
+            self, ctx, resp["response"]["checkins"]["items"][0])
+    elif resp["response"]["checkins"]["count"] > 1:
+        checkins = resp["response"]["checkins"]["items"]
         checkinStr = checkins_to_string(self, count, checkins)
         checkinList = checkins
         embed = discord.Embed(title=profile, description=checkinStr[:2048])
@@ -1362,7 +1397,7 @@ async def getCheckins(self, ctx, profile: str = None,
     return result
 
 
-async def searchBeer(ctx, query, limit=None, rating=None):
+async def searchBeer(self, ctx, query, limit=None, rating=None):
     """Given a query string and some other
     information returns an embed of results"""
 
@@ -1373,31 +1408,18 @@ async def searchBeer(ctx, query, limit=None, rating=None):
 
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
 #    print(url)
-    try:
-        async with ctx.cog.session.get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            else:
-                return ("Beer search failed with code "
-                        + str(resp.status))
-
-        # Confirm success
-        if j['meta']['code'] == 200:
-            return j['response']['beers']
-        else:
-            return "Found no beers but got no errors"
-    except (aiohttp.errors.ClientResponseError,
-            aiohttp.errors.ClientRequestError,
-            aiohttp.errors.ClientOSError,
-            aiohttp.errors.ClientDisconnectedError,
-            aiohttp.errors.ClientTimeoutError,
-            aiohttp.errors.HttpProcessingError) as exc:
-        return "Search failed with {%s}".format(exc)
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp["meta"]["code"] == 200:
+        return resp['response']['beers']
+    else:
+        return ("Search for `{!s}` resulted in {!s}: {!s}".
+                format(query, resp["meta"]["code"],
+                       resp["meta"]["error_detail"]))
 
 
-async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
+async def searchBeer_to_embed(self, ctx, query, limit=None, rating=None):
     """Searches for a beer and returns an embed"""
-    beers = await searchBeer(ctx, query, limit, rating)
+    beers = await searchBeer(self, ctx, query, limit, rating)
     if isinstance(beers, str):
         # I'm not sure what happens when a naked embed gets returned.
         # return embedme(beers)
@@ -1436,7 +1458,7 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
                     beer['beer']['auth_rating']
                 )
             elif beer['have_had']:
-                resultStr += ' (\*)'
+                resultStr += " (\\*)"
             resultStr += "\n"
             beer_list.append(beer['beer']['bid'])
             if firstnum == 1:
@@ -1456,7 +1478,7 @@ async def searchBeer_to_embed(ctx, query, limit=None, rating=None):
     return (result)
 
 
-async def profileLookup(self, profile, limit=5):
+async def profileLookup(self, ctx, profile, limit=5):
     """Looks up a profile in untappd by username"""
     query = urllib.parse.quote_plus(profile)
     embed = False
@@ -1470,25 +1492,21 @@ async def profileLookup(self, profile, limit=5):
 
     # TODO: Honor is_private flag on private profiles.
 
-    async with self.session.get(url) as resp:
-        if resp.status == 200:
-            j = await resp.json()
-        elif resp.status == 404:
-            return "The profile '{!s}' does not exist".format(profile)
-        elif resp.status == 500:
-            return "The untappd server is having an error"
-        else:
-            print("Failed for url: " + url)
-            return "Profile query failed with code {!s}".format(resp.status)
+    resp = await get_data_from_untappd(self, ctx, url)
+    if resp["meta"]["code"] == 400:
+        return "The profile '{!s}' does not exist".format(profile)
+    else:
+        print("Failed for url: " + url)
+        return "Profile query failed with code {!s} - {!s}".format(
+            resp["meta"]["code"], resp["meta"]["error_detail"])
 
-#        print (json.dumps(j['response'],indent=4))
-        if j['meta']['code'] == 200:
-            (embed, beerList) = user_to_embed(self, j['response']['user'],
-                                              limit)
-        else:
-            embed = discord.Embed(
-                title="No user found",
-                description="Search for " + profile + " resulted in no users")
+    if resp['meta']['code'] == 200:
+        (embed, beerList) = user_to_embed(self, resp['response']['user'],
+                                          limit)
+    else:
+        embed = discord.Embed(
+            title="No user found",
+            description="Search for " + profile + " resulted in no users")
 
     result = dict()
     result["embed"] = embed
@@ -1816,3 +1834,30 @@ def brewery_location(brewery):
         if brewery["country_name"]:
             brewery_loca.append(brewery["country_name"])
     return format(', '.join(brewery_loca))
+
+
+async def get_data_from_untappd(self, ctx, url):
+    """Perform a GET against the provided URL, returns a response
+    NOTE: Provided URL is already formatted"""
+
+    j = False
+
+    try:
+        async with ctx.cog.session.get(url) as resp:
+            headers = resp.headers
+            if int(headers["X-Ratelimit-Remaining"]) < 10:
+                await self.bot.whisper(
+                    ("Warning: **{!s}** API calls left for you this hour "
+                     "and some commands use multiple calls. Sorry."
+                     ).format(headers["X-Ratelimit-Remaining"])
+                )
+            j = await resp.json()
+    except (aiohttp.errors.ClientResponseError,
+            aiohttp.errors.ClientRequestError,
+            aiohttp.errors.ClientOSError,
+            aiohttp.errors.ClientDisconnectedError,
+            aiohttp.errors.ClientTimeoutError,
+            aiohttp.errors.HttpProcessingError) as exc:
+        return "Untappd call failed with {%s}".format(exc)
+
+    return j
