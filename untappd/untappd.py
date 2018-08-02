@@ -961,15 +961,7 @@ class Untappd:
             keys["limit"] = 1
             qstr = urllib.parse.urlencode(keys)
             checkin_url += "?{!s}".format(qstr)
-            async with self.session.get(checkin_url) as resp:
-                if resp.status == 200:
-                    j = await resp.json()
-                else:
-                    # print("Lookup failed for url: "+url)
-                    await self.bot.say("Lookup failed with {!s}".format(
-                        resp.status))
-                    return
-
+            j = await get_data_from_untappd(self, ctx, checkin_url)
             if j["meta"]["code"] != 200:
                 # print("Lookup failed for url: "+url)
                 await self.bot.say("Lookup failed with {!s} - {!s}").format(
@@ -978,7 +970,12 @@ class Untappd:
                     )
                 return
 
-            checkin = j["response"]["checkins"]["items"][0]
+            if isinstance(j["response"]["checkins"]["items"], list):
+                checkin = j["response"]["checkins"]["items"][0]
+            else:
+                await self.bot.say("Things seem to work but I did not get"
+                                   "a list of checkins")
+                return
         else:
             # The case where a checkin id was provided
             keys = dict()
@@ -994,15 +991,7 @@ class Untappd:
                 checkin_id, qstr
             )
 
-            async with self.session.get(checkin_url) as resp:
-                if resp.status == 200:
-                    j = await resp.json()
-                else:
-                    # print("Lookup failed for url: "+url)
-                    await self.bot.say("Lookup failed with {!s}".format(
-                        resp.status))
-                    return
-
+            j = await get_data_from_untappd(self, ctx, url)
             if j["meta"]["code"] != 200:
                 # print("Lookup failed for url: "+url)
                 await self.bot.say("Lookup failed with {!s} - {!s}").format(
@@ -1495,18 +1484,12 @@ async def profileLookup(self, ctx, profile, limit=5):
     resp = await get_data_from_untappd(self, ctx, url)
     if resp["meta"]["code"] == 400:
         return "The profile '{!s}' does not exist".format(profile)
-    else:
-        print("Failed for url: " + url)
-        return "Profile query failed with code {!s} - {!s}".format(
-            resp["meta"]["code"], resp["meta"]["error_detail"])
-
-    if resp['meta']['code'] == 200:
+    elif resp['meta']['code'] == 200:
         (embed, beerList) = user_to_embed(self, resp['response']['user'],
                                           limit)
     else:
-        embed = discord.Embed(
-            title="No user found",
-            description="Search for " + profile + " resulted in no users")
+        return "Profile query failed with code {!s} - {!s}".format(
+            resp["meta"]["code"], resp["meta"]["error_detail"])
 
     result = dict()
     result["embed"] = embed
@@ -1845,12 +1828,13 @@ async def get_data_from_untappd(self, ctx, url):
     try:
         async with ctx.cog.session.get(url) as resp:
             headers = resp.headers
-            if int(headers["X-Ratelimit-Remaining"]) < 10:
-                await self.bot.whisper(
-                    ("Warning: **{!s}** API calls left for you this hour "
-                     "and some commands use multiple calls. Sorry."
-                     ).format(headers["X-Ratelimit-Remaining"])
-                )
+            if "X-Ratelimit-Remaining" in headers:
+                if int(headers["X-Ratelimit-Remaining"]) < 10:
+                    await self.bot.whisper(
+                        ("Warning: **{!s}** API calls left for you this hour "
+                         "and some commands use multiple calls. Sorry."
+                         ).format(headers["X-Ratelimit-Remaining"])
+                    )
             j = await resp.json()
     except (aiohttp.errors.ClientResponseError,
             aiohttp.errors.ClientRequestError,
