@@ -991,7 +991,7 @@ class Untappd:
                 checkin_id, qstr
             )
 
-            j = await get_data_from_untappd(self, ctx, url)
+            j = await get_data_from_untappd(self, ctx, checkin_url)
             if j["meta"]["code"] != 200:
                 # print("Lookup failed for url: "+url)
                 await self.bot.say("Lookup failed with {!s} - {!s}").format(
