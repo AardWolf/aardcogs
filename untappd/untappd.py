@@ -261,7 +261,7 @@ class Untappd:
                ).format(profile, qstr)
         j = await get_data_from_untappd(self, ctx, url)
         if "meta" in j:
-            if j["meta"]["code"] == "200":
+            if int(j["meta"]["code"]) == 200:
                 if "user" in j['response']:
                     uid = j['response']['user']['uid']
                 else:
@@ -281,7 +281,7 @@ class Untappd:
                ).format(uid, qstr)
         j = await get_data_from_untappd(self, ctx, url)
         if "meta" in j:
-            if j["meta"]["code"] == "200":
+            if int(j["meta"]["code"]) == 200:
                 # This is probably the case where it worked!
                 if "target_user" in j['response']:
                     response_str = (
@@ -299,7 +299,7 @@ class Untappd:
                ).format(uid, qstr)
         j = await get_data_from_untappd(self, ctx, url)
         if "meta" in j:
-            if j["meta"]["code"] == "200":
+            if int(j["meta"]["code"]) == 200:
                 response_str = ""
                 if "target_user" in j['response']:
                     response_str = (
