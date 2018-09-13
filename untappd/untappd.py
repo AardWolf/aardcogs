@@ -3,9 +3,10 @@ import discord
 from discord.ext import commands
 from cogs.utils import checks
 import aiohttp
-from .utils.dataIO import dataIO
+from cogs.utils.dataIO import dataIO
 import os
 import urllib.parse
+# noinspection PyUnresolvedReferences
 from __main__ import send_cmd_help
 from datetime import datetime, timezone
 
@@ -48,7 +49,7 @@ class Untappd:
                 "left": "⬅"
         }
 
-    # invaild syntax?
+    # invalid syntax?
     @commands.group(no_pm=False, invoke_without_command=False,
                     pass_context=True)
     async def groupdrink(self, ctx):
@@ -60,6 +61,7 @@ class Untappd:
     @checks.mod_or_permissions(manage_messages=True)
     async def sheet_url(self, ctx, url):
         """The published web app URL that accepts GETs and POSTs"""
+        server = None
         try:
             server = ctx.message.server.id
             if server not in self.settings:
@@ -80,6 +82,7 @@ class Untappd:
     @checks.mod_or_permissions(manage_messages=True)
     async def finish(self, ctx):
         """The published web app URL that accepts GETs and POSTs"""
+        server = None
         try:
             server = ctx.message.server.id
             if server not in self.settings:
@@ -107,8 +110,9 @@ class Untappd:
     @untappd.command(no_pm=True, pass_context=True)
     @checks.mod_or_permissions(manage_messages=True)
     async def list_size(self, ctx, new_size: int):
-        """The length of lists of resultsm specific to a server now"""
+        """The length of lists of results specific to a server now"""
         is_pm = True
+        server = None
         try:
             server = ctx.message.server.id
             if server not in self.settings:
@@ -150,10 +154,9 @@ class Untappd:
     @untappd.command(pass_context=True, no_pm=True)
     async def setnick(self, ctx, keywords):
         """Set your untappd user name to use for future commands"""
-        # TODO: Replace future commands with the commands
         if not keywords:
             await send_cmd_help(ctx)
-        if (ctx.message.server):
+        if ctx.message.server:
             server = ctx.message.server.id
             if server not in self.settings:
                 self.settings[server] = {}
@@ -170,7 +173,7 @@ class Untappd:
             # print("Guild: {!s}".format(ctx.message.server))
 
     @untappd.command(pass_context=True, no_pm=False)
-    async def authme(self, ctx):
+    async def authme(self):
         """Starts the authorization process for a user"""
         # TODO: Check if already authorized and confirm to reauth
         auth_url = ("https://untappd.com/oauth/authenticate/?client_id="
@@ -262,14 +265,14 @@ class Untappd:
         j = await get_data_from_untappd(self, ctx, url)
         if "meta" in j:
             if int(j["meta"]["code"]) == 200:
-                if "user" in j['response']:
+                if "user" in j["response"]:
                     uid = j['response']['user']['uid']
                 else:
                     await self.bot.say("Could not look up that user")
                     return
             else:
                 await self.bot.say(
-                    ("I was unable to look up {!s}: {!s} / {!s}").format(
+                    "I was unable to look up {!s}: {!s} / {!s}".format(
                         profile, j["meta"]["code"], j["meta"]["error_detail"]
                     ))
                 return
@@ -421,7 +424,7 @@ class Untappd:
         """Lookup a beer to see if you've had it
         Requires that you've authenticated the bot to act as you"""
 
-        resultStr = ""
+        resultStr = ""  # type: str
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
@@ -447,7 +450,7 @@ class Untappd:
             beers = await searchBeer(self, ctx, keywords, limit=1)
             if isinstance(beers, str):
                 await self.bot.say(
-                    ("Lookup of `{!s}` didn't result in a beer list: {!s}").
+                    "Lookup of `{!s}` didn't result in a beer list: {!s}".
                     format(keywords, beers)
                     )
                 return
@@ -490,7 +493,7 @@ class Untappd:
                                   beer["brewery"]["brewery_name"]
                               )
                 if beer["stats"]["total_user_count"]:
-                    resultStr += (" but {!s} other people have.").format(
+                    resultStr += " but {!s} other people have.".format(
                         human_number(beer["stats"]["total_user_count"])
                     )
                 if set_beer_id:
@@ -549,7 +552,7 @@ class Untappd:
         else:
             message = await self.bot.say(resultStr)
 
-        if (len(beer_list) > 1):
+        if len(beer_list) > 1:
             await embed_menu(self, ctx, beer_list, message, 30)
 
     @commands.command(pass_context=True, no_pm=False)
@@ -842,6 +845,7 @@ class Untappd:
         """Add a found beer to the spreadsheet. Beer id or search"""
 
         author = ctx.message.author
+        url = ""
         if ctx.message.server:
             guild = str(ctx.message.server.id)
             if "project_url" in self.settings[guild]:
@@ -866,7 +870,7 @@ class Untappd:
             beers = await searchBeer(self, ctx, keywords, limit=1)
             if isinstance(beers, str):
                 await self.bot.say(
-                    ("Lookup of `{!s}` didn't result in a beer list: {!s}").
+                    "Lookup of `{!s}` didn't result in a beer list: {!s}".
                     format(keywords, beers)
                     )
                 return
@@ -888,7 +892,7 @@ class Untappd:
             await self.bot.say("Looks like there are no projects right now")
             return
         beer = await get_beer_by_id(self, ctx, beerid)
-        if (isinstance(beer, str)):
+        if isinstance(beer, str):
             # This happens in error situations
             await self.bot.say(beer)
             return
@@ -1055,6 +1059,7 @@ class Untappd:
     async def undrank(self, ctx, checkin_id: int):
         """Removes a checkin from the spreadsheet. Use ddp to add it back"""
 
+        url = ""
         if ctx.message.server:
             guild = str(ctx.message.server.id)
             if "project_url" in self.settings[guild]:
@@ -1161,7 +1166,7 @@ async def get_beer_by_id(self, ctx, beerid):
     if resp['meta']['code'] == 200:
         return resp['response']['beer']
     else:
-        return ("Query failed with code {!s}: {!s}").format(
+        return "Query failed with code {!s}: {!s}".format(
             resp['meta']['code'],
             resp['meta']['error_detail']
         )
@@ -1199,12 +1204,13 @@ def beer_to_embed(beer, rating=None, list_size=5):
                                    "%a, %d %b %Y %H:%M:%S %z")
     else:
         beerTS = datetime.now(timezone.utc)
-    embed = discord.Embed(title=beer_title,
+    embed = discord.Embed(title="by {!s}"
+                          .format(beer['brewery']['brewery_name']),
                           description=beer['beer_description'][:2048],
-                          url=beer_url,
+                          url=brewery_url,
                           timestamp=beerTS)
-    embed.set_author(name=beer['brewery']['brewery_name'],
-                     url=brewery_url,
+    embed.set_author(name=beer_title,
+                     url=beer_url,
                      icon_url=beer['brewery']['brewery_label'])
     embed.add_field(name="Brewery Home",
                     value=brewery_location(beer['brewery']))
@@ -1278,7 +1284,7 @@ async def toastIt(self, ctx, checkin: int, auth_token: str = None):
                "`untappd authme` to start the process")
 
     qstr = urllib.parse.urlencode(keys)
-    url = ("https://api.untappd.com/v4/checkin/toast/{!s}?{!s}").format(
+    url = "https://api.untappd.com/v4/checkin/toast/{!s}?{!s}".format(
         checkin, qstr
     )
     # print("Using URL: {!s}".format(url))
@@ -1299,7 +1305,7 @@ async def toastIt(self, ctx, checkin: int, auth_token: str = None):
             return "Toast failed for some reason"
     else:
         # print("Lookup failed for url: "+url)
-        return ("Toast failed with {!s} - {!s}").format(
+        return "Toast failed with {!s} - {!s}".format(
             resp["meta"]["code"],
             resp["meta"]["error_detail"])
 
@@ -1315,14 +1321,14 @@ async def getCheckin(self, ctx, checkin: int, auth_token: str = None):
     else:
         keys["client_secret"] = self.settings["client_secret"]
     qstr = urllib.parse.urlencode(keys)
-    url = ("https://api.untappd.com/v4/checkin/view/{!s}?{!s}").format(
+    url = "https://api.untappd.com/v4/checkin/view/{!s}?{!s}".format(
         checkin, qstr
     )
 
     resp = await get_data_from_untappd(self, ctx, url)
     if resp['meta']['code'] != 200:
         # print("Lookup failed for url: "+url)
-        return ("Lookup failed with {!s} - {!s}").format(
+        return "Lookup failed with {!s} - {!s}".format(
             resp["meta"]["code"],
             resp["meta"]["error_detail"])
 
@@ -1358,14 +1364,14 @@ async def getCheckins(self, ctx, profile: str = None,
         keys["max_id"] = start
     keys["client_id"] = self.settings["client_id"]
     qstr = urllib.parse.urlencode(keys)
-    url = ("https://api.untappd.com/v4/user/checkins/{!s}?{!s}").format(
+    url = "https://api.untappd.com/v4/user/checkins/{!s}?{!s}".format(
         profile, qstr
     )
     # print("Looking up: {!s}".format(url))
     resp = await get_data_from_untappd(self, ctx, url)
     if resp["meta"]["code"] != 200:
         # print("Lookup failed for url: "+url)
-        return ("Lookup failed with {!s} - {!s}").format(
+        return "Lookup failed with {!s} - {!s}".format(
             resp["meta"]["code"],
             resp["meta"]["error_detail"]
             )
@@ -1464,7 +1470,7 @@ async def searchBeer_to_embed(self, ctx, query, limit=None, rating=None):
     result["embed"] = embed
     if beer_list:
         result["beer_list"] = beer_list
-    return (result)
+    return result
 
 
 async def profileLookup(self, ctx, profile, limit=5):
@@ -1477,7 +1483,6 @@ async def profileLookup(self, ctx, profile, limit=5):
         self.settings["client_secret"])
 
     url = "https://api.untappd.com/v4/user/info/" + query + "?" + api_key
-    # print("Profile URL: " + url) #TODO: Add debug setting
 
     # TODO: Honor is_private flag on private profiles.
 
@@ -1502,6 +1507,7 @@ def user_to_embed(self, user, limit=5):
     """Takes the user portion of a json response and returns an embed \
 and a checkin list"""
     beerList = []
+    recentStr = ""
     if 'checkins' in user:
         recentStr = checkins_to_string(self, limit,
                                        user['checkins']['items'])
@@ -1542,7 +1548,7 @@ and a checkin list"""
                         value=flair_str,
                         inline=True)
     embed.set_thumbnail(url=user['user_avatar'])
-    return (embed, beerList)
+    return embed, beerList
 
 
 async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
@@ -1575,12 +1581,14 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
     react = reacts[react.reaction.emoji]
     react -= 1
     if len(beer_list) > react:
+        new_embed = ""
         if type == "beer":
             new_embed = await lookupBeer(self, ctx,
                                          beer_list[react], list_size=1)
         elif type == "checkin":
             new_embed = await checkin_to_embed(self, ctx, beer_list[react])
-        await self.bot.say(embed=new_embed)
+        if isinstance(new_embed, discord.Embed):
+            await self.bot.say(embed=new_embed)
         try:
             try:
                 await self.bot.clear_reactions(message)
@@ -1625,11 +1633,11 @@ async def checkin_to_embed(self, ctx, checkin):
     # Get the base beer information
     beer = await get_beer_by_id(self, ctx, checkin["beer"]["bid"])
     # titleStr = "Checkin {!s}".format(checkin["checkin_id"])
-    url = ("https://untappd.com/user/{!s}/checkin/{!s}").format(
+    url = "https://untappd.com/user/{!s}/checkin/{!s}".format(
         checkin["user"]["user_name"],
         checkin["checkin_id"]
         )
-    titleStr = ("{!s} was drinking a {!s} by {!s}").format(
+    titleStr = "{!s} was drinking a {!s} by {!s}".format(
                    checkin["user"]["first_name"],
                    checkin["beer"]["beer_name"],
                    checkin["brewery"]["brewery_name"]
@@ -1841,7 +1849,8 @@ async def get_data_from_untappd(self, ctx, url):
             aiohttp.errors.ClientOSError,
             aiohttp.errors.ClientDisconnectedError,
             aiohttp.errors.ClientTimeoutError,
+            aiohttp.errors.ServerDisconnectedError,
             aiohttp.errors.HttpProcessingError) as exc:
-        return "Untappd call failed with {%s}".format(exc)
+        return "Untappd call failed with {!s}".format(exc)
 
     return j
