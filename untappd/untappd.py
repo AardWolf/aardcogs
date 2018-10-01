@@ -905,7 +905,7 @@ class Untappd:
         }
         qstr = urllib.parse.urlencode(keys)
         url += "?{!s}".format(qstr)
-        async with self.session.get(url) as resp:
+        async with aiohttp.ClientSession().get(url) as resp:
             if resp.status == 200:
                 j = await resp.json()
             else:
@@ -1035,7 +1035,8 @@ class Untappd:
             "checkin_date": checkin_date,
             "comment": comment
         }
-        async with self.session.post(url, data=payload) as resp:
+        session = aiohttp.ClientSession()
+        async with session.post(url, data=payload) as resp:
             if resp.status == 200:
                 j = await resp.json()
             else:
@@ -1076,7 +1077,7 @@ class Untappd:
             "action": "undrank",
             "checkin": checkin_id,
         }
-        async with self.session.post(url, data=payload) as resp:
+        async with aiohttp.ClientSession().post(url, data=payload) as resp:
             if resp.status == 200:
                 j = await resp.json()
             else:
@@ -1831,19 +1832,18 @@ async def get_data_from_untappd(self, ctx, url):
     """Perform a GET against the provided URL, returns a response
     NOTE: Provided URL is already formatted"""
 
-    j = False
-
     try:
-        async with ctx.cog.session.get(url) as resp:
-            headers = resp.headers
-            if "X-Ratelimit-Remaining" in headers:
-                if int(headers["X-Ratelimit-Remaining"]) < 10:
-                    await self.bot.whisper(
-                        ("Warning: **{!s}** API calls left for you this hour "
-                         "and some commands use multiple calls. Sorry."
-                         ).format(headers["X-Ratelimit-Remaining"])
-                    )
-            j = await resp.json()
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(url) as resp:
+                headers = resp.headers
+                if "X-Ratelimit-Remaining" in headers:
+                    if int(headers["X-Ratelimit-Remaining"]) < 10:
+                        await self.bot.whisper(
+                            ("Warning: **{!s}** API calls left for you this hour "
+                             "and some commands use multiple calls. Sorry."
+                             ).format(headers["X-Ratelimit-Remaining"])
+                        )
+                return await resp.json()
     except (aiohttp.errors.ClientResponseError,
             aiohttp.errors.ClientRequestError,
             aiohttp.errors.ClientOSError,
@@ -1852,5 +1852,3 @@ async def get_data_from_untappd(self, ctx, url):
             aiohttp.errors.ServerDisconnectedError,
             aiohttp.errors.HttpProcessingError) as exc:
         return "Untappd call failed with {!s}".format(exc)
-
-    return j
