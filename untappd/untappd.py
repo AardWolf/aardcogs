@@ -29,7 +29,6 @@ class Untappd:
             self.settings["supporter_emoji"] = ":moneybag:"
         if "moderator_emoji" not in self.settings:
             self.settings["moderator_emoji"] = ":crown:"
-        self.session = aiohttp.ClientSession()
         self.channels = {}
         self.emoji = {
                 1: "1⃣",
@@ -905,21 +904,22 @@ class Untappd:
         }
         qstr = urllib.parse.urlencode(keys)
         url += "?{!s}".format(qstr)
-        async with aiohttp.ClientSession().get(url) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            else:
-                return "Query failed with code " + str(resp.status)
-
-            if j['result'] == "success":
-                embed = await lookupBeer(self, ctx, beerid)
-                if not embed:
-                    await self.bot.say("{!s} added!".format(keys["beer_name"]))
+        async with aiohttp.ClientSession() as sess:
+            async with sess.get(url) as resp:
+                if resp.status == 200:
+                    j = await resp.json()
                 else:
-                    await self.bot.say("{!s} added!".format(keys["beer_name"]),
-                                       embed=embed)
-            else:
-                await self.bot.say("Something went wrong adding the beer")
+                    return "Query failed with code " + str(resp.status)
+
+                if j['result'] == "success":
+                    embed = await lookupBeer(self, ctx, beerid)
+                    if not embed:
+                        await self.bot.say("{!s} added!".format(keys["beer_name"]))
+                    else:
+                        await self.bot.say("{!s} added!".format(keys["beer_name"]),
+                                           embed=embed)
+                else:
+                    await self.bot.say("Something went wrong adding the beer")
 
     @commands.command(pass_context=True, no_pm=False)
     async def ddp(self, ctx, checkin_id: int = 0):
@@ -1035,26 +1035,26 @@ class Untappd:
             "checkin_date": checkin_date,
             "comment": comment
         }
-        session = aiohttp.ClientSession()
-        async with session.post(url, data=payload) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            else:
-                return "Query failed with code " + str(resp.status)
-
-            if j['result'] == "success":
-                embed = await getCheckin(self, ctx,
-                                         checkin=checkin_id,
-                                         auth_token=auth_token)
-                if embed:
-                    await self.bot.say("Checkin {!s} added!"
-                                       .format(checkin_id),
-                                       embed=embed)
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(url, data=payload) as resp:
+                if resp.status == 200:
+                    j = await resp.json()
                 else:
-                    await self.bot.say("Checkin {!s} added!"
-                                       .format(checkin_id))
-            else:
-                await self.bot.say("Something went wrong adding the checkin")
+                    return "Query failed with code " + str(resp.status)
+
+                if j['result'] == "success":
+                    embed = await getCheckin(self, ctx,
+                                             checkin=checkin_id,
+                                             auth_token=auth_token)
+                    if embed:
+                        await self.bot.say("Checkin {!s} added!"
+                                           .format(checkin_id),
+                                           embed=embed)
+                    else:
+                        await self.bot.say("Checkin {!s} added!"
+                                           .format(checkin_id))
+                else:
+                    await self.bot.say("Something went wrong adding the checkin")
 
     @commands.command(pass_context=True, no_pm=True)
     async def undrank(self, ctx, checkin_id: int):
@@ -1077,19 +1077,20 @@ class Untappd:
             "action": "undrank",
             "checkin": checkin_id,
         }
-        async with aiohttp.ClientSession().post(url, data=payload) as resp:
-            if resp.status == 200:
-                j = await resp.json()
-            else:
-                return "Query failed with code " + str(resp.status)
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(url, data=payload) as resp:
+                if resp.status == 200:
+                    j = await resp.json()
+                else:
+                    return "Query failed with code " + str(resp.status)
 
-            if j['result'] == "success":
-                await self.bot.say(("Checkin {!s} removed from the scoreboard"
-                                    " if it existed").format(checkin_id)
-                                   )
-            else:
-                await self.bot.say("Something went wrong adding the checkin")
-                print(j)
+                if j['result'] == "success":
+                    await self.bot.say(("Checkin {!s} removed from the scoreboard"
+                                        " if it existed").format(checkin_id)
+                                       )
+                else:
+                    await self.bot.say("Something went wrong adding the checkin")
+                    print(j)
 
 
 def check_folders():
