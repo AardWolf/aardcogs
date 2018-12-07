@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
 # Checkin: https://untappd.com/c/<checkin>
+# Deeplink Beer: untappd://beer/BEER_ID
+# Deeplink Brewery: untappd:///brewery/BREWERY_ID
+# Deeplink Checkin: untappd://checkin/CHECKIN_ID
 # prefix = ctx.prefix
 
 
@@ -1713,7 +1716,18 @@ async def checkin_to_embed(self, ctx, checkin):
         for badge in checkin["badges"]["items"]:
             badgeStr += "{!s}\n".format(badge["badge_name"])
         embed.add_field(name="Badges", value=badgeStr[:1024])
-
+    deep_checkin_link = "[Open Check-In in App](untappd://checkin/{!s})".format(
+        checkin["checkin_id"]
+    )
+    deep_beer_link = "[Open Beer in App](untappd://beer/{!s})".format(
+        checkin["beer"]["bid"]
+    )
+    deep_brewery_link = "[Open Brewery in App](untappd://brewery/{!s})".format(
+            checkin["beer"]["brewery_id"]
+    )
+    embed.add_field(name="DeepCheckin", value=deep_checkin_link)
+    embed.add_field(name="DeepBeer", value=deep_beer_link)
+    embed.add_field(name="DeepBrewery", value=deep_brewery_link)
     embed.set_footer(text="Checkin {!s} / Beer {!s}"
                      .format(checkin["checkin_id"],
                              checkin["beer"]["bid"]))
