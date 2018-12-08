@@ -1639,7 +1639,7 @@ async def checkin_to_embed(self, ctx, checkin):
         checkin["user"]["user_name"],
         checkin["checkin_id"]
         )
-    titleStr = "{!s} was drinking a {!s} by {!s}".format(
+    titleStr = "{!s} was drinking {!s} by {!s}".format(
                    checkin["user"]["first_name"],
                    checkin["beer"]["beer_name"],
                    checkin["brewery"]["brewery_name"]
