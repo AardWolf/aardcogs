@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 # Beer: https://untappd.com/beer/<bid>
 # Brewery: https://untappd.com/brewery/<bid>
 # Checkin: https://untappd.com/c/<checkin>
+# Deeplink Beer: untappd://beer/BEER_ID
+# Deeplink Brewery: untappd:///brewery/BREWERY_ID
+# Deeplink Checkin: untappd://checkin/CHECKIN_ID
 # prefix = ctx.prefix
 
 
@@ -29,6 +32,8 @@ class Untappd:
             self.settings["supporter_emoji"] = ":moneybag:"
         if "moderator_emoji" not in self.settings:
             self.settings["moderator_emoji"] = ":crown:"
+        if "app_emoji" not in self.settings:
+            self.settings["app_emoji"] = ":beers:"
         self.channels = {}
         self.emoji = {
                 1: "1⃣",
@@ -148,6 +153,16 @@ class Untappd:
         self.settings["moderator_emoji"] = str(emoji)
         dataIO.save_json("data/untappd/settings.json", self.settings)
         await self.bot.say("Profiles of super users will now display ("
+                           + str(emoji) + ")")
+
+
+    @untappd.command()
+    @checks.mod_or_permissions(manage_messages=True)
+    async def app_emoji(self, emoji: str):
+        """The emoji to use for super users"""
+        self.settings["app_emoji"] = str(emoji)
+        dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.say("App deep links will now use ("
                            + str(emoji) + ")")
 
     @untappd.command(pass_context=True, no_pm=True)
@@ -1639,11 +1654,23 @@ async def checkin_to_embed(self, ctx, checkin):
         checkin["user"]["user_name"],
         checkin["checkin_id"]
         )
-    titleStr = "{!s} was drinking a {!s} by {!s}".format(
-                   checkin["user"]["first_name"],
-                   checkin["beer"]["beer_name"],
-                   checkin["brewery"]["brewery_name"]
+    deep_checkin_link = "[{!s}](untappd://checkin/{!s})".format(
+        self.settings["app_emoji"],
+        checkin["checkin_id"]
+    )
+    titleStr = "{!s} was drinking {!s} by {!s}".format(
+                    checkin["user"]["first_name"],
+                    checkin["beer"]["beer_name"],
+                    checkin["brewery"]["brewery_name"]
                )
+    deep_beer_link = "[{!s}](untappd://beer/{!s})".format(
+        self.settings["app_emoji"],
+        checkin["beer"]["bid"]
+    )
+    deep_brewery_link = "[{!s}](untappd://brewery/{!s})".format(
+        self.settings["app_emoji"],
+        checkin["brewery"]["brewery_id"]
+    )
     checkinTS = datetime.strptime(checkin["created_at"],
                                   "%a, %d %b %Y %H:%M:%S %z")
 
@@ -1713,7 +1740,9 @@ async def checkin_to_embed(self, ctx, checkin):
         for badge in checkin["badges"]["items"]:
             badgeStr += "{!s}\n".format(badge["badge_name"])
         embed.add_field(name="Badges", value=badgeStr[:1024])
-
+#    embed.add_field(name="DeepCheckin", value=deep_checkin_link)
+#    embed.add_field(name="DeepBeer", value=deep_beer_link)
+#    embed.add_field(name="DeepBrewery", value=deep_brewery_link)
     embed.set_footer(text="Checkin {!s} / Beer {!s}"
                      .format(checkin["checkin_id"],
                              checkin["beer"]["bid"]))
