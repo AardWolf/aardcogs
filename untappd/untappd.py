@@ -352,6 +352,7 @@ class Untappd:
 
         me = self.bot
         beerid = 0
+        default_beer = False
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
@@ -371,6 +372,7 @@ class Untappd:
                 if self.channels[channel]:
                     if "beer" in self.channels[channel]:
                         beerid = self.channels[channel]["beer"]
+                        default_beer = True
             if not beerid:
                 await self.bot.send_cmd_help(ctx)
                 return
@@ -407,10 +409,16 @@ class Untappd:
             j = await get_data_from_untappd(self, ctx, url)
             if "meta" in j:
                 if int(j["meta"]["code"]) == 200:
-                    beer = j['response']['beer']['beer']
-                    beer['brewery'] = j['response']['beer']['brewery']
-                    embed = beer_to_embed(beer)
-                    await me.say("Beer added to wishlist", embed=embed)
+                    if default_beer:
+                        await me.say("{!s} from {!s} added to wishlist!".format(
+                            j['response']['beer']['beer']['beer_name'],
+                            j['response']['beer']['brewery']['brewery_name']
+                        ))
+                    else:
+                        beer = j['response']['beer']['beer']
+                        beer['brewery'] = j['response']['beer']['brewery']
+                        embed = beer_to_embed(beer)
+                        await me.say("Beer added to wishlist", embed=embed)
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await me.say("I'm fairly certain that is already on your list, go find it already!")
@@ -431,6 +439,7 @@ class Untappd:
 
         me = self.bot
         beerid = 0
+        default_beer = False
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
@@ -450,6 +459,7 @@ class Untappd:
                 if self.channels[channel]:
                     if "beer" in self.channels[channel]:
                         beerid = self.channels[channel]["beer"]
+                        default_beer = True
             if not beerid:
                 await self.bot.send_cmd_help(ctx)
                 return
@@ -486,10 +496,16 @@ class Untappd:
             j = await get_data_from_untappd(self, ctx, url)
             if "meta" in j:
                 if int(j["meta"]["code"]) == 200:
-                    beer = j['response']['beer']['beer']
-                    beer['brewery'] = j['response']['beer']['brewery']
-                    embed = beer_to_embed(beer)
-                    await me.say("Beer removed from wishlist", embed=embed)
+                    if default_beer:
+                        await me.say("{!s} from {!s} removed from wishlist!".format(
+                            j['response']['beer']['beer']['beer_name'],
+                            j['response']['beer']['brewery']['brewery_name']
+                        ))
+                    else:
+                        beer = j['response']['beer']['beer']
+                        beer['brewery'] = j['response']['beer']['brewery']
+                        embed = beer_to_embed(beer)
+                        await me.say("Beer removed from wishlist", embed=embed)
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await me.say("Are you sure that was on your wishlist? It's still there if it was")
