@@ -352,6 +352,7 @@ class Untappd:
 
         me = self.bot
         beerid = 0
+        default_beer = False
         if not check_credentials(self.settings):
             await self.bot.say("The owner has not set the API information "
                                "and should use the `untappd_apikey` command")
@@ -371,6 +372,7 @@ class Untappd:
                 if self.channels[channel]:
                     if "beer" in self.channels[channel]:
                         beerid = self.channels[channel]["beer"]
+                        default_beer = True
             if not beerid:
                 await self.bot.send_cmd_help(ctx)
                 return
@@ -407,26 +409,107 @@ class Untappd:
             j = await get_data_from_untappd(self, ctx, url)
             if "meta" in j:
                 if int(j["meta"]["code"]) == 200:
-                    beer = j['response']['beer']['beer']
-                    beer['brewery'] = j['response']['beer']['brewery']
-                    embed = beer_to_embed(beer)
-                    await me.say("Beer added to wishlist", embed=embed)
+                    if default_beer:
+                        await me.say("{!s} from {!s} added to wishlist!".format(
+                            j['response']['beer']['beer']['beer_name'],
+                            j['response']['beer']['brewery']['brewery_name']
+                        ))
+                    else:
+                        beer = j['response']['beer']['beer']
+                        beer['brewery'] = j['response']['beer']['brewery']
+                        embed = beer_to_embed(beer)
+                        await me.say("Beer added to wishlist", embed=embed)
                     return
                 elif int(j["meta"]["code"]) == 500:
-                    url = ("https://api.untappd.com/v4/user/wishlist/"
-                           "delete?{!s}").format(qstr)
-                    j = await get_data_from_untappd(self, ctx, url)
-                    if "meta" in j:
-                        if int(j["meta"]["code"]) == 200:
-                            beer = j['response']['beer']['beer']
-                            beer['brewery'] = j['response']['beer']['brewery']
-                            embed = beer_to_embed(beer)
-                            await me.say("Beer removed from wishlist",
-                                         embed=embed)
-                        else:
-                            print("That didn't quite work with '" + url + "'")
-                            await me.say("I tried adding it, I tried removing"
-                                         "it. Nothing I tried worked")
+                    await me.say("I'm fairly certain that is already on your list, go find it already!")
+                    return
+                else:
+                    await me.say("Weird, got code {!s}".
+                                 format(j["meta"]["code"]))
+        else:
+            await me.say("I was unable to find such a beer, sorry")
+
+    @commands.command(pass_context=True, no_pm=False)
+    async def unwishlist(self, ctx, *keywords):
+        """Requires that you've authorized the bot.
+        Removes a beer from your wishlist.
+        If you provide a beer id, that's used.
+        Otherwise it's the first search result (findbeer1)
+        or the last beer shared in the channel"""
+
+        me = self.bot
+        beerid = 0
+        default_beer = False
+        if not check_credentials(self.settings):
+            await self.bot.say("The owner has not set the API information "
+                               "and should use the `untappd_apikey` command")
+            return
+
+        keys = getAuth(ctx)
+        if "access_token" not in keys:
+            await self.bot.say("You must first authorize me to act as you"
+                               " using `untappd authme`")
+            return
+
+        if keywords:
+            keywords = " ".join(keywords)
+        else:
+            channel = ctx.message.channel.id
+            if channel in self.channels:
+                if self.channels[channel]:
+                    if "beer" in self.channels[channel]:
+                        beerid = self.channels[channel]["beer"]
+                        default_beer = True
+            if not beerid:
+                await self.bot.send_cmd_help(ctx)
+                return
+
+        await self.bot.send_typing(ctx.message.channel)
+        if not beerid and keywords.isdigit():
+            beer = await get_beer_by_id(self, ctx, keywords)
+            if isinstance(beer, str):
+                await self.bot.say("Wishlist remove failed - {!s}".
+                                   format(beer))
+                return
+            beerid = keywords
+        elif not beerid:
+            beers = await searchBeer(self, ctx, keywords, limit=1)
+            if isinstance(beers["items"], list) and len(beers["items"]) > 0:
+                beerid = beers["items"][0]["beer"]["bid"]
+            else:
+                await self.bot.say("I'm afraid `{!s}` was not found".format(
+                    keywords
+                ))
+
+        if beerid:
+            # Attempt to add to the wishlist
+            if "access_token" not in keys:
+                return("You have not authorized the bot to act as you, use"
+                       "`untappd authme` to start the process")
+
+            keys["bid"] = beerid
+            qstr = urllib.parse.urlencode(keys)
+            url = ("https://api.untappd.com/v4/user/wishlist/delete?{!s}"
+                   ).format(qstr)
+            # print("Using URL: {!s}".format(url))
+
+            j = await get_data_from_untappd(self, ctx, url)
+            if "meta" in j:
+                if int(j["meta"]["code"]) == 200:
+                    if default_beer:
+                        await me.say("{!s} from {!s} removed from wishlist!".format(
+                            j['response']['beer']['beer']['beer_name'],
+                            j['response']['beer']['brewery']['brewery_name']
+                        ))
+                    else:
+                        beer = j['response']['beer']['beer']
+                        beer['brewery'] = j['response']['beer']['brewery']
+                        embed = beer_to_embed(beer)
+                        await me.say("Beer removed from wishlist", embed=embed)
+                    return
+                elif int(j["meta"]["code"]) == 500:
+                    await me.say("Are you sure that was on your wishlist? It's still there if it was")
+                    return
                 else:
                     await me.say("Weird, got code {!s}".
                                  format(j["meta"]["code"]))
