@@ -650,7 +650,8 @@ class Untappd:
             message = await self.bot.say(resultStr)
 
         if len(beer_list) > 1:
-            await embed_menu(self, ctx, beer_list, message, 30)
+            await embed_menu(self, ctx, beer_list, message, 60)
+            #Raised to 60 second wait
 
     @commands.command(pass_context=True, no_pm=False)
     async def findbeer1(self, ctx, *keywords):
@@ -1289,7 +1290,7 @@ async def lookupBeer(self, ctx, beerid: int, rating=None, list_size=5):
 
 
 def beer_to_embed(beer, rating=None, list_size=5):
-    """Takes a beer json respons object and returns an embed"""
+    """Takes a beer json response object and returns an embed"""
     if 'bid' not in beer:
         return embedme("No bid, didn't look like a beer")
     beerid = beer['bid']
@@ -1365,11 +1366,14 @@ def beer_to_embed(beer, rating=None, list_size=5):
     if "collaborations_with" in beer:
         collabStr = ""
         collabs = beer['collaborations_with']['items']
-        for collab in collabs:
+        for num, collab in zip(range(10),
+                             collabs):
             collabStr += "[" + collab['brewery']['brewery_name']
             collabStr += "](https://untappd.com/brewery/"
             collabStr += str(collab['brewery']['brewery_id']) + ")\n"
-        embed.add_field(name="Collaboration with", value=collabStr)
+        if len(collabs) > 10:
+            collabStr += "... and more"
+        embed.add_field(name="Collaboration with", value=collabStr[:2048])
     return embed
 
 
@@ -1652,7 +1656,7 @@ and a checkin list"""
 
 
 async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
-                     type: str = "beer", paging: bool = False):
+                     type: str = "beer", paging: bool = False, reacted: bool = False):
     """Says the message with the embed and adds menu for reactions"""
     emoji = []
     limit = list_size(self, ctx.message.server)
@@ -1668,6 +1672,7 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
     react = await self.bot.wait_for_reaction(
         message=message, timeout=timeout, emoji=emoji, user=ctx.message.author)
     if react is None:
+        # await self.bot.say("Timed out, cleaning up")
         try:
             try:
                 await self.bot.clear_reactions(message)
@@ -1676,7 +1681,15 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
                     await self.bot.remove_reaction(message, e, self.bot.user)
         except discord.Forbidden:
             pass
+        if reacted:
+            # Somebody reacted so can remove the message
+            try:
+                await self.bot.delete_message(message)
+            except discord.Forbidden:
+                await self.bot.say("I wanted to clean up but I am not allowed")
+
         return None
+    did_react = True
     reacts = {v: k for k, v in self.emoji.items()}
     react = reacts[react.reaction.emoji]
     react -= 1
@@ -1689,14 +1702,8 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
             new_embed = await checkin_to_embed(self, ctx, beer_list[react])
         if isinstance(new_embed, discord.Embed):
             await self.bot.say(embed=new_embed)
-        try:
-            try:
-                await self.bot.clear_reactions(message)
-            except discord.Forbidden:
-                for e in emoji:
-                    await self.bot.remove_reaction(message, e, self.bot.user)
-        except discord.Forbidden:
-            pass
+
+    await embed_menu(self, ctx, beer_list, message, timeout=timeout, reacted=True)
 
 
 def checkins_to_string(self, count: int, checkins: list):
