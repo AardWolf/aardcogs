@@ -1703,7 +1703,8 @@ async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
         if isinstance(new_embed, discord.Embed):
             await self.bot.say(embed=new_embed)
 
-    await embed_menu(self, ctx, beer_list, message, timeout=timeout, reacted=True)
+    await embed_menu(self, ctx, beer_list, message, timeout=timeout,
+                     reacted=True, type=type, paging=paging)
 
 
 def checkins_to_string(self, count: int, checkins: list):
