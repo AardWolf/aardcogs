@@ -1289,7 +1289,7 @@ async def lookupBeer(self, ctx, beerid: int, rating=None, list_size=5):
 
 
 def beer_to_embed(beer, rating=None, list_size=5):
-    """Takes a beer json respons object and returns an embed"""
+    """Takes a beer json response object and returns an embed"""
     if 'bid' not in beer:
         return embedme("No bid, didn't look like a beer")
     beerid = beer['bid']
@@ -1365,11 +1365,14 @@ def beer_to_embed(beer, rating=None, list_size=5):
     if "collaborations_with" in beer:
         collabStr = ""
         collabs = beer['collaborations_with']['items']
-        for collab in collabs:
+        for num, collab in zip(range(10),
+                             collabs):
             collabStr += "[" + collab['brewery']['brewery_name']
             collabStr += "](https://untappd.com/brewery/"
             collabStr += str(collab['brewery']['brewery_id']) + ")\n"
-        embed.add_field(name="Collaboration with", value=collabStr)
+        if len(collabs) > 10:
+            collabStr += "... and more"
+        embed.add_field(name="Collaboration with", value=collabStr[:2048])
     return embed
 
 
