@@ -95,7 +95,11 @@ class Traderep:
                 ))
                 if cur.rowcount == 1:
                     # TODO: Change all these to return a Member object for proper display name
-                    partner = await self.bot.get_user_info(row[0])
+                    if ctx.message.server:
+                        partner = await ctx.message.server.get_member(row[0])
+                    else:
+                        await self.bot.say("This command doesn't work in PM")
+                        return
                     if partner:
                         await self.bot.say("Trade {} between {} and {} was closed and ratings can be assigned".format(
                             trade_num, ctx.message.author.display_name, partner.display_name
@@ -131,7 +135,11 @@ class Traderep:
                     trade_num
                 ))
                 if cur.rowcount == 1:
-                    partner = await self.bot.get_user_info(row[0])
+                    if ctx.message.server:
+                        partner = await ctx.message.server.get_member(row[0])
+                    else:
+                        await self.bot.say("This command doesn't work in PM")
+                        return
                     if partner:
                         await self.bot.say("Trade {} between {} and {} was cancelled".format(
                             trade_num, ctx.message.author.display_name, partner.display_name
@@ -166,7 +174,11 @@ class Traderep:
             if row[0]:
                 cur.execute("update tradeperson set rep = 1, rep_time = 'now' where tradenum = ? and "
                             "person = ? and partner = ?", (trade_num, ctx.message.author.id, row[0]))
-                partner = await self.bot.get_user_info(row[0])
+                if ctx.message.server:
+                    partner = await ctx.message.server.get_member(row[0])
+                else:
+                    await self.bot.say("This command doesn't work in PM")
+                    return
                 if partner:
                     await self.bot.say("You repped {} for trade {}.".format(
                         partner.display_name, trade_num
@@ -200,7 +212,11 @@ class Traderep:
             if row[0]:
                 cur.execute("update tradeperson set rep = -1, rep_time = 'now' where tradenum = ? and "
                             "person = ? and partner = ?",(trade_num, ctx.message.author.id, row[0]))
-                partner = await self.bot.get_user_info(row[0])
+                if ctx.message.server:
+                    partner = await ctx.message.server.get_member(row[0])
+                else:
+                    await self.bot.say("This command doesn't work in PM")
+                    return
                 if partner:
                     await self.bot.say("You repped {} for trade {}.".format(
                         partner.display_name, trade_num
