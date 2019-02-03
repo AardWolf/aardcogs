@@ -94,6 +94,7 @@ class Traderep:
                     trade_num
                 ))
                 if cur.rowcount == 1:
+                    # TODO: Change all these to return a Member object for proper display name
                     partner = await self.bot.get_user_info(row[0])
                     if partner:
                         await self.bot.say("Trade {} between {} and {} was closed and ratings can be assigned".format(
@@ -220,13 +221,14 @@ class Traderep:
     @traderep.command(name="report", pass_context=True, no_pm=True)
     async def report(self, ctx, *, args="0"):
         """Generates a report on a user. Accepts names, mentions, and IDs"""
-        # TODO: Currently not parsing mentions properly
-        id_to_use = 0
+        mentions = ctx.message.mentions
         if not args or args == "0":
             # User is reporting on themself
             id_to_use = ctx.message.author.id
         elif isinstance(args, discord.User):
             id_to_use = args.id
+        elif mentions and isinstance(mentions, list) and isinstance(mentions[0], discord.Member):
+            id_to_use = mentions[0].id
         elif args.isdigit():
             id_to_use = args
         else:
