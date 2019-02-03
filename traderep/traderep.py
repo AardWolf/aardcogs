@@ -232,7 +232,7 @@ class Traderep:
         else:
             await self.bot.say("Either trade {} didn't involve you or it isn't closed".format(trade_num))
 
-    @traderep.command(name="report", pass_context=True, no_pm=True)
+    @traderep.command(name="report", aliases=["profile"], pass_context=True, no_pm=True)
     async def report(self, ctx, *, args="0"):
         """Generates a report on a user. Accepts names, mentions, and IDs"""
         mentions = ctx.message.mentions
