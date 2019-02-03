@@ -40,7 +40,6 @@ class Traderep:
     @traderep.command(name="start", pass_context=True, no_pm=True)
     async def trade_start(self, ctx, partner: discord.Member):
         """Starts a trade between the person executing the command and the person mentioned"""
-        # TODO: Simple check to make sure trade between partners doesn't already exist
         await self.bot.send_typing(ctx.message.channel)
         if partner.id == ctx.message.author.id:
             await self.bot.say("You can't trade with yourself, that's a 0-sum game!")
@@ -94,9 +93,8 @@ class Traderep:
                     trade_num
                 ))
                 if cur.rowcount == 1:
-                    # TODO: Change all these to return a Member object for proper display name
                     if ctx.message.server:
-                        partner = await ctx.message.server.get_member(row[0])
+                        partner = ctx.message.server.get_member(row[0])
                     else:
                         await self.bot.say("This command doesn't work in PM")
                         return
@@ -136,7 +134,7 @@ class Traderep:
                 ))
                 if cur.rowcount == 1:
                     if ctx.message.server:
-                        partner = await ctx.message.server.get_member(row[0])
+                        partner = ctx.message.server.get_member(row[0])
                     else:
                         await self.bot.say("This command doesn't work in PM")
                         return
@@ -175,7 +173,7 @@ class Traderep:
                 cur.execute("update tradeperson set rep = 1, rep_time = 'now' where tradenum = ? and "
                             "person = ? and partner = ?", (trade_num, ctx.message.author.id, row[0]))
                 if ctx.message.server:
-                    partner = await ctx.message.server.get_member(row[0])
+                    partner = ctx.message.server.get_member(row[0])
                 else:
                     await self.bot.say("This command doesn't work in PM")
                     return
@@ -211,9 +209,9 @@ class Traderep:
         if row:
             if row[0]:
                 cur.execute("update tradeperson set rep = -1, rep_time = 'now' where tradenum = ? and "
-                            "person = ? and partner = ?",(trade_num, ctx.message.author.id, row[0]))
+                            "person = ? and partner = ?", (trade_num, ctx.message.author.id, row[0]))
                 if ctx.message.server:
-                    partner = await ctx.message.server.get_member(row[0])
+                    partner = ctx.message.server.get_member(row[0])
                 else:
                     await self.bot.say("This command doesn't work in PM")
                     return
@@ -301,11 +299,8 @@ class Traderep:
 
         # Find recent trading partners
         cur.execute("SELECT person, rep FROM tradeperson tp JOIN trade t ON t.tradenum = tp.tradenum"
-                    " WHERE tp.partner = {} and t.status = 1 ORDER BY rep_time desc LIMIT 5".format(
-            id_to_use
-        ))
+                    " WHERE tp.partner = {} and t.status = 1 ORDER BY rep_time desc LIMIT 5".format(id_to_use))
         rows = cur.fetchmany(size=5)
-        open_names = ""
         if len(rows) == 0:
             open_names = "No completed trades"
         else:
@@ -360,10 +355,12 @@ def db_upgrade(con, old_version):
     if old_version < 1.0:
         cursor = con.cursor()
         cursor.execute("DELETE FROM version where 1=1")
-        cursor.execute("INSERT INTO version values(?)", (1.0)) #incremental upgrades
+        cursor.execute("INSERT INTO version values(1.0)")
         cursor.execute("COMMIT TRANSACTION")
         old_version = 1.0
     # Note for future: create a new table, copy /change data to it, drop old table, create table, copy data
+    if old_version < db_version:
+        print("Database is at {} but don't know how to upgrade to {}".format(old_version, db_version))
 
 
 def setup(bot):
@@ -371,4 +368,3 @@ def setup(bot):
     check_files()
 
     bot.add_cog(Traderep(bot))
-
