@@ -5,5 +5,5 @@
 	"DISABLED" : false,
 	"NAME" : "Trade Rep",
 	"TAGS" : ["trade", "reputation", "rep"],
-	"INSTALL_MSG" : "TBD"
+	"INSTALL_MSG" : "A database will be created in data/traderep. You should back that up."
 }

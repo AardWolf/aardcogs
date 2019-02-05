@@ -1,9 +1,10 @@
 import discord
 from discord.ext import commands
 from cogs.utils import checks
-from __main__ import send_cmd_help
 import sqlite3
 import os
+# noinspection PyUnresolvedReferences
+from __main__ import send_cmd_help
 
 db_version = 1.0
 
@@ -232,7 +233,7 @@ class Traderep:
         else:
             await self.bot.say("Either trade {} didn't involve you or it isn't closed".format(trade_num))
 
-    @traderep.command(name="report", pass_context=True, no_pm=True)
+    @traderep.command(name="report", aliases=["profile"], pass_context=True, no_pm=True)
     async def report(self, ctx, *, args="0"):
         """Generates a report on a user. Accepts names, mentions, and IDs"""
         mentions = ctx.message.mentions
@@ -314,6 +315,54 @@ class Traderep:
             open_names = open_names.rstrip(", ")
         report_str += open_names + "\n"
         await self.bot.say(report_str)
+
+    @traderep.command(name="status", aliases=["me"], pass_context=True, no_pm=True)
+    async def status(self, ctx):
+        """Replies with your status for trades missing rep"""
+        # TODO: Add a version for admins to get the same report
+        await self.bot.send_typing(ctx.message.channel)
+        cur = self.connection.cursor()
+        cur.execute("SELECT count(tradenum), sum(rep) from tradeperson where partner = {} and rep is not null".format(
+            ctx.message.author.id
+        ))
+        (repped_trades, rep) = cur.fetchone()
+        cur.execute("SELECT count(t.tradenum) from trade t join tradeperson tp on tp.tradenum = t.tradenum"
+                    " where t.status = 1 and tp.rep is null and tp.partner = {}".format(ctx.message.author.id))
+        (missing_rep) = cur.fetchone()
+        status_str = "You have {} rep over {} repped trades.\n".format(rep, repped_trades)
+        cur.execute("SELECT partner, tp.tradenum FROM tradeperson tp JOIN trade t ON t.tradenum = tp.tradenum"
+                    " WHERE tp.person = {} AND tp.rep is null and t.status = 1 ORDER BY t.end_time asc"
+                    .format(ctx.message.author.id))
+        trades_to_rep = cur.fetchmany(size=10)
+        if len(trades_to_rep) == 0:
+            status_str += "You are a good trading partner. Or at least you have no unrepped completed trades.\n"
+        else:
+            status_str += "Completed trades waiting for you to rep them: "
+            for row in trades_to_rep:
+                user = ctx.message.server.get_member(row[0])
+                if user:
+                    status_str += "trade {} with {}, ".format(row[1], user.display_name)
+                else:
+                    status_str += "trade {} with ({}), ".format(row[1], row[0])
+            status_str = status_str.rstrip(", ")
+            status_str += "\n"
+        cur.execute("SELECT person, tp.tradenum FROM tradeperson tp JOIN trade t ON t.tradenum = tp.tradenum"
+                    " WHERE tp.partner = {} AND tp.rep is null and t.status = 1 ORDER BY t.end_time asc"
+                    .format(ctx.message.author.id))
+        trades_to_rep = cur.fetchmany(size=10)
+        if len(trades_to_rep) == 0:
+            status_str += "You have good trading partners or at least none you are waiting for rep from.\n"
+        else:
+            status_str += "Partners you might want to poke so they rep you: "
+            for row in trades_to_rep:
+                user = ctx.message.server.get_member(row[0])
+                if user:
+                    status_str += "trade {} with {}, ".format(row[1], user.display_name)
+                else:
+                    status_str += "trade {} with ({}), ".format(row[1], row[0])
+            status_str = status_str.rstrip(", ")
+            status_str += "\n"
+        await self.bot.say(status_str)
 
 
 def check_folders():
