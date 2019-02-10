@@ -87,12 +87,16 @@ class Traderep:
     async def trade_stop(self, ctx, arg):
         """Stops a trade but doesn't break it"""
         trade_who, trade_num = None, None
-        if isinstance(arg, int):
+        mentions = ctx.message.mentions
+        if arg.isdigit():
             trade_num = arg
         elif isinstance(arg, discord.Member):
             trade_who = arg.id
+        elif mentions and isinstance(mentions, list) and isinstance(mentions[0], discord.Member):
+            trade_who = mentions[0].id
         cur = self.connection.cursor()
         if trade_who:
+            trade_person = ctx.message.server.get_member(trade_who)
             cur.execute("SELECT partner, t.tradenum from tradeperson tp join trade t on t.tradenum = tp.tradenum "
                         "where tp.person = ? and tp.partner = ? and t.status is null",
                         (ctx.message.author.id, trade_who))
@@ -132,12 +136,13 @@ class Traderep:
             else:
                 await self.bot.say("Either trade {} didn't involve you or it isn't open".format(trade_num))
         else:
-            if isinstance(arg, int):
+            if arg.isdigit():
                 await self.bot.say("Either trade {} didn't involve you or it isn't open".format(trade_num))
-            elif isinstance(arg, discord.Member):
-                await self.bot.say("It doesn't look like you have an open trade with {}".format(arg.display_name))
+            elif trade_person:
+                await self.bot.say("It doesn't look like you have an open trade with {}".format(
+                    trade_person.display_name))
             else:
-                await self.bot.say("Sorry, not sure how this happened but I didn't do anything either")
+                await self.bot.say("Pretty sure that trade doesn't exist or is complete")
 
     @traderep.command(name="rep", pass_context=True, no_pm=True)
     async def rep(self, ctx, arg):
