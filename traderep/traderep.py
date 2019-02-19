@@ -430,7 +430,7 @@ class Traderep:
             status_str += "Has no partners waiting on reps. "
 
         if closed_waiting_trade:
-            report_str += "Waiting on rep from {} partners: ".format(name_to_use)
+            report_str += "{} is waiting on rep from: ".format(name_to_use)
             cur.execute("SELECT tp.person, tp.tradenum from trade t join tradeperson tp on tp.tradenum = t.tradenum"
                         " where t.status = 1 and tp.rep is null and tp.partner = {}".format(id_to_use))
             rows = cur.fetchmany(size=10)
