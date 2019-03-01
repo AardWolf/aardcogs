@@ -994,31 +994,56 @@ class Untappd:
             # This happens in error situations
             await self.bot.say(beer)
             return
-        keys = {
+        # added for March 2019 -- collabs!
+        collabs = 0
+        if "collaborations_with" in beer:
+            collabs = beer["collaborations_with"]["count"]
+
+        payload = {
+            "action": "found",
             "bid": beerid,
             "username": profile,
-            "beer_name": "{!s} from {!s}".format(
-                beer["beer_name"], beer["brewery"]["brewery_name"]
-                )
+            "beer_string": "{!s} from {!s}".format(beer["beer_name"], beer["brewery"]["brewery_name"]),
+            "beer_name": beer["beer_name"],
+            "brewery_id": beer["brewery"]["brewery_id"],
+            "brewery_name": beer["brewery"]["brewery_name"],
+            "collabs": collabs
         }
-        qstr = urllib.parse.urlencode(keys)
-        url += "?{!s}".format(qstr)
         async with aiohttp.ClientSession() as sess:
-            async with sess.get(url) as resp:
+            async with sess.post(url, data=payload) as resp:
                 if resp.status == 200:
-                    j = await resp.json()
+                    try:
+                        j = await resp.json()
+                    except ValueError:
+                        await self.bot.say("Error somewhere in Google")
+                        # text = await resp.read()
+                        # print(text)
+                        return
                 else:
                     return "Query failed with code " + str(resp.status)
 
                 if j['result'] == "success":
+                    response_str = ""
+                    if "message" in j:
+                        response_str += j["message"] + " "
+                    if "hasStats" in j:
+                        response_str += "{} has {} points across {} checkins and {} found beers. ".format(
+                            profile, j["points"], j["checkins"], j["found"]
+                        )
+                    if "beerStats" in j:
+                        response_str += " {} has been found by {} people. {} has {} beers found so far. ".format(
+                            beer["beer_name"], j["beerPeople"], beer["brewery"]["brewery_name"], j["breweryPeople"])
                     embed = await lookupBeer(self, ctx, beerid)
-                    if not embed:
-                        await self.bot.say("{!s} added!".format(keys["beer_name"]))
-                    else:
-                        await self.bot.say("{!s} added!".format(keys["beer_name"]),
+                    if embed:
+                        await self.bot.say(response_str,
                                            embed=embed)
+                    else:
+                        await self.bot.say(response_str)
                 else:
-                    await self.bot.say("Something went wrong adding the beer")
+                    if "message" in j:
+                        await self.bot.say("Negatory: {}".format(j['message']))
+                    else:
+                        await self.bot.say("Something went wrong finding the beer")
 
     @commands.command(pass_context=True, no_pm=False)
     async def ddp(self, ctx, checkin_id: int = 0):
@@ -1119,6 +1144,11 @@ class Untappd:
         avg_rating = beer["rating_score"]
         total_checkins = beer["stats"]["total_user_count"]
 
+        # added for March 2019 -- collabs!
+        collabs = 0
+        if "collaborations_with" in beer:
+            collabs = beer["collaborations_with"]["count"]
+
         payload = {
             "action": "drank",
             "checkin": checkin_id,
@@ -1132,28 +1162,43 @@ class Untappd:
             "avg_rating": avg_rating,
             "total_checkins": total_checkins,
             "checkin_date": checkin_date,
+            "collabs": collabs,
             "comment": comment
         }
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, data=payload) as resp:
                 if resp.status == 200:
-                    j = await resp.json()
+                    try:
+                        j = await resp.json()
+                    except ValueError:
+                        await self.bot.say("Error somewhere in Google")
+                        # text = await resp.read()
+                        # print(text)
+                        return
                 else:
                     return "Query failed with code " + str(resp.status)
 
                 if j['result'] == "success":
+                    response_str = ""
+                    if "message" in j:
+                        response_str += j["message"] + " "
+                    if "hasStats" in j:
+                        response_str += "{} has {} points across {} checkins and {} found beers.".format(
+                            username, j["points"], j["checkins"], j["found"]
+                        )
                     embed = await getCheckin(self, ctx,
                                              checkin=checkin_id,
                                              auth_token=auth_token)
                     if embed:
-                        await self.bot.say("Checkin {!s} added!"
-                                           .format(checkin_id),
+                        await self.bot.say(response_str,
                                            embed=embed)
                     else:
-                        await self.bot.say("Checkin {!s} added!"
-                                           .format(checkin_id))
+                        await self.bot.say(response_str)
                 else:
-                    await self.bot.say("Something went wrong adding the checkin")
+                    if "message" in j:
+                        await self.bot.say("Negatory: {}".format(j['message']))
+                    else:
+                        await self.bot.say("Something went wrong adding the checkin")
 
     @commands.command(pass_context=True, no_pm=True)
     async def undrank(self, ctx, checkin_id: int):
@@ -1179,17 +1224,30 @@ class Untappd:
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, data=payload) as resp:
                 if resp.status == 200:
-                    j = await resp.json()
+                    try:
+                        j = await resp.json()
+                    except ValueError:
+                        await self.bot.say("Error somewhere in Google")
+                        text = await resp.read()
+                        print(text)
+                        return
                 else:
                     return "Query failed with code " + str(resp.status)
 
                 if j['result'] == "success":
-                    await self.bot.say(("Checkin {!s} removed from the scoreboard"
-                                        " if it existed").format(checkin_id)
-                                       )
+                    response_str = ""
+                    if "message" in j:
+                        response_str += j["message"] + " "
+                    if "hasStats" in j:
+                        response_str += "{} has {} points across {} checkins and {} found beers.".format(
+                            j["username"], j["points"], j["checkins"], j["found"]
+                        )
+                    await self.bot.say(response_str)
                 else:
-                    await self.bot.say("Something went wrong adding the checkin")
-                    print(j)
+                    if "message" in j:
+                        await self.bot.say(j["message"])
+                    else:
+                        await self.bot.say("Something went wrong adding the checkin")
 
 
 def check_folders():
