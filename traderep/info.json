@@ -1,0 +1,9 @@
+{
+	"AUTHOR" : "Aardwolf98",
+	"SHORT" : "Manage trade reputation for Discord users",
+	"DESCRIPTION" : "Very simple trade reputation management for discord users to indicate success, failures, and acknowledgement of a good trade.",
+	"DISABLED" : false,
+	"NAME" : "Trade Rep",
+	"TAGS" : ["trade", "reputation", "rep"],
+	"INSTALL_MSG" : "A database will be created in data/traderep. You should back that up."
+}
