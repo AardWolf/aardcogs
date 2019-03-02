@@ -1868,11 +1868,14 @@ async def checkin_to_embed(self, ctx, checkin):
     if "collaborations_with" in beer:
         collabStr = ""
         collabs = beer['collaborations_with']['items']
-        for collab in collabs:
+        for num, collab in zip(range(10),
+                             collabs):
             collabStr += "[" + collab['brewery']['brewery_name']
             collabStr += "](https://untappd.com/brewery/"
             collabStr += str(collab['brewery']['brewery_id']) + ")\n"
-        embed.add_field(name="Collaboration with", value=collabStr)
+        if len(collabs) > 10:
+            collabStr += "... and more"
+        embed.add_field(name="Collaboration with", value=collabStr[:2048])
     if checkin["checkin_comment"]:
         embed.add_field(name="Comment",
                         value=checkin["checkin_comment"][:1024])
