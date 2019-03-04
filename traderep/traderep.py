@@ -159,7 +159,7 @@ class Traderep:
             trade_who = mentions[0].id
             # First look to close a trade
             cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
-                        " where person = ? and partner = ? and t.status is null",
+                        " where person = ? and partner = ? and t.status is null order by start_time asc",
                         (ctx.message.author.id, trade_who))
             row = cur.fetchone()
             if row and row[0]:
@@ -167,16 +167,17 @@ class Traderep:
             else:
                 # Look for an unrepped trade
                 cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
-                            " where person = ? and partner = ? and t.status = 1 and tp.rep is null",
+                            " where person = ? and partner = ? and t.status = 1 and tp.rep is null order by "
+                            "t.start_time asc",
                             (ctx.message.author.id, trade_who))
                 row = cur.fetchone()
                 if row and row[0]:
                     trade_num = row[0]
                 else:
-                    # Use most recent started trade
+                    # Use least recent started trade
                     cur.execute(
                         "SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
-                        " where person = ? and partner = ? and t.status = 1 order by t.start_time desc",
+                        " where person = ? and partner = ? and t.status = 1 order by t.start_time asc",
                         (ctx.message.author.id, trade_who))
                     row = cur.fetchone()
                     if row and row[0]:
@@ -189,7 +190,8 @@ class Traderep:
             return
         # Find the open trade number
         cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
-                    " where tp.tradenum = ? and person = ? and (t.status = 1 or t.status is null)",
+                    " where tp.tradenum = ? and person = ? and (t.status = 1 or t.status is null)"
+                    " order by t.start_time asc",
                     (trade_num, ctx.message.author.id))
         row = cur.fetchone()
         if row:
