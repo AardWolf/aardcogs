@@ -186,6 +186,28 @@ class Untappd:
             # print("Channel type: {!s}".format(ctx.message.channel.type))
             # print("Guild: {!s}".format(ctx.message.server))
 
+    @untappd.command(pass_context=True, no_pm=True)
+    async def friendme(self, ctx):
+        """Toggles whether you are interested in random friend requests from this Discord server"""
+        message = "This command is only available in a server, not in a PM."
+        if ctx.message.server:
+            server = ctx.message.server.id
+            if server not in self.settings:
+                self.settings[server] = {}
+            author = ctx.message.author.id
+            message = "You just said you'd like to receive random friend requests from this server"
+            if author not in self.settings[server]:
+                self.settings[server][author] = {
+                    "friendme": 1
+                }
+            elif "friendme" not in self.settings[server][author] or not self.settings[server][author]["friendme"]:
+                self.settings[server][author]["friendme"] = 1
+            else:
+                self.settings[server][author]["friendme"] = 0
+                message = "You have said you no longer want to receive random friend requests from this server"
+            dataIO.save_json("data/untappd/settings.json", self.settings)
+        await self.bot.say(message)
+
     @untappd.command(pass_context=True, no_pm=False)
     async def authme(self):
         """Starts the authorization process for a user"""
@@ -1172,6 +1194,7 @@ class Untappd:
                         j = await resp.json()
                     except ValueError:
                         await self.bot.say("Error somewhere in Google")
+                        # print(resp)
                         # text = await resp.read()
                         # print(text)
                         return
@@ -1186,6 +1209,9 @@ class Untappd:
                         response_str += "{} has {} points across {} checkins and {} found beers.".format(
                             username, j["points"], j["checkins"], j["found"]
                         )
+                        if "styleString" in j:
+                            response_str += "\n{}".format(j["styleString"])
+                            print(j["styleString"])
                     embed = await getCheckin(self, ctx,
                                              checkin=checkin_id,
                                              auth_token=auth_token)
