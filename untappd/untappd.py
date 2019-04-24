@@ -1194,6 +1194,7 @@ class Untappd:
                         j = await resp.json()
                     except ValueError:
                         await self.bot.say("Error somewhere in Google")
+                        # print(resp)
                         # text = await resp.read()
                         # print(text)
                         return
@@ -1208,6 +1209,9 @@ class Untappd:
                         response_str += "{} has {} points across {} checkins and {} found beers.".format(
                             username, j["points"], j["checkins"], j["found"]
                         )
+                        if "styleString" in j:
+                            response_str += "\n{}".format(j["styleString"])
+                            print(j["styleString"])
                     embed = await getCheckin(self, ctx,
                                              checkin=checkin_id,
                                              auth_token=auth_token)
