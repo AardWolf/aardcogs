@@ -86,7 +86,7 @@ class Traderep:
     @traderep.command(name="cancel", aliases=["stop"], pass_context=True, no_pm=True)
     async def trade_stop(self, ctx, arg):
         """Stops a trade but doesn't break it"""
-        trade_who, trade_num = None, None
+        trade_who, trade_num, trade_person = None, None, None
         mentions = ctx.message.mentions
         if arg.isdigit():
             trade_num = arg
@@ -442,7 +442,7 @@ class Traderep:
                 if user:
                     name_str += "{} ({}), ".format(user.display_name, row[1])
                 else:
-                    name_str += "({}) ({}), ".format(row[0]. row[1])
+                    name_str += "({}) ({}), ".format(row[0], row[1])
             name_str = name_str.rstrip(", ")
             report_str += name_str + "\n"
         else:
