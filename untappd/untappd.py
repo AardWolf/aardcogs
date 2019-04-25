@@ -186,27 +186,28 @@ class Untappd:
             # print("Channel type: {!s}".format(ctx.message.channel.type))
             # print("Guild: {!s}".format(ctx.message.server))
 
-    @untappd.command(pass_context=True, no_pm=True)
-    async def friendme(self, ctx):
-        """Toggles whether you are interested in random friend requests from this Discord server"""
-        message = "This command is only available in a server, not in a PM."
-        if ctx.message.server:
-            server = ctx.message.server.id
-            if server not in self.settings:
-                self.settings[server] = {}
-            author = ctx.message.author.id
-            message = "You just said you'd like to receive random friend requests from this server"
-            if author not in self.settings[server]:
-                self.settings[server][author] = {
-                    "friendme": 1
-                }
-            elif "friendme" not in self.settings[server][author] or not self.settings[server][author]["friendme"]:
-                self.settings[server][author]["friendme"] = 1
-            else:
-                self.settings[server][author]["friendme"] = 0
-                message = "You have said you no longer want to receive random friend requests from this server"
-            dataIO.save_json("data/untappd/settings.json", self.settings)
-        await self.bot.say(message)
+    # This code was part of an enhancement that is no longer needed
+    # @untappd.command(pass_context=True, no_pm=True)
+    # async def friendme(self, ctx):
+    #     """Toggles whether you are interested in random friend requests from this Discord server"""
+    #     message = "This command is only available in a server, not in a PM."
+    #     if ctx.message.server:
+    #         server = ctx.message.server.id
+    #         if server not in self.settings:
+    #             self.settings[server] = {}
+    #         author = ctx.message.author.id
+    #         message = "You just said you'd like to receive random friend requests from this server"
+    #         if author not in self.settings[server]:
+    #             self.settings[server][author] = {
+    #                 "friendme": 1
+    #             }
+    #         elif "friendme" not in self.settings[server][author] or not self.settings[server][author]["friendme"]:
+    #             self.settings[server][author]["friendme"] = 1
+    #         else:
+    #             self.settings[server][author]["friendme"] = 0
+    #             message = "You have said you no longer want to receive random friend requests from this server"
+    #         dataIO.save_json("data/untappd/settings.json", self.settings)
+    #     await self.bot.say(message)
 
     @untappd.command(pass_context=True, no_pm=False)
     async def authme(self):
@@ -1678,8 +1679,14 @@ async def profileLookup(self, ctx, profile, limit=5):
     if resp["meta"]["code"] == 400:
         return "The profile '{!s}' does not exist".format(profile)
     elif resp['meta']['code'] == 200:
-        (embed, beerList) = user_to_embed(self, resp['response']['user'],
+        (embed, beerList) = user_to_embed(self, ctx, resp['response']['user'],
                                           limit)
+        # Coded as an enhancement request but managed through Discord means
+        # friendly = is_friendly(self, ctx, profile)
+        # if friendly:
+        #     embed.add_field(name="Friendly",
+        #                     value="Accepts friend requests from Discordians",
+        #                     inline=True)
     else:
         return "Profile query failed with code {!s} - {!s}".format(
             resp["meta"]["code"], resp["meta"]["error_detail"])
@@ -1691,7 +1698,7 @@ async def profileLookup(self, ctx, profile, limit=5):
     return result
 
 
-def user_to_embed(self, user, limit=5):
+def user_to_embed(self, ctx, user, limit=5):
     """Takes the user portion of a json response and returns an embed \
 and a checkin list"""
     beerList = []
@@ -1736,7 +1743,38 @@ and a checkin list"""
                         value=flair_str,
                         inline=True)
     embed.set_thumbnail(url=user['user_avatar'])
+
     return embed, beerList
+
+
+def is_friendly(self, ctx, profile: str):
+    """Checks if user set themselves to accept friend requests"""
+    server = 1
+    if ctx.message.server:
+        server = str(ctx.message.server.id)
+    else:
+        return False
+
+    member = ctx.message.server.get_member_named(profile)
+    if member:
+        try:
+            if self.settings[server][str(member.id)]["friendme"] == 1:
+                return True
+        except KeyError:
+            pass
+    if server:
+        # See if they set a nickname
+        if server in self.settings:
+            for author in self.settings[server]:
+                try:
+                    if 'nick' in self.settings[server][author]:
+                        if self.settings[server][author]["nick"] == profile:
+                            if self.settings[server][author]["friendme"] == 1:
+                                return True
+                except (KeyError, TypeError):
+                    pass
+
+    return False
 
 
 async def embed_menu(self, ctx, beer_list: list, message, timeout: int = 30,
