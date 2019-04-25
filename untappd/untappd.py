@@ -186,27 +186,28 @@ class Untappd:
             # print("Channel type: {!s}".format(ctx.message.channel.type))
             # print("Guild: {!s}".format(ctx.message.server))
 
-    @untappd.command(pass_context=True, no_pm=True)
-    async def friendme(self, ctx):
-        """Toggles whether you are interested in random friend requests from this Discord server"""
-        message = "This command is only available in a server, not in a PM."
-        if ctx.message.server:
-            server = ctx.message.server.id
-            if server not in self.settings:
-                self.settings[server] = {}
-            author = ctx.message.author.id
-            message = "You just said you'd like to receive random friend requests from this server"
-            if author not in self.settings[server]:
-                self.settings[server][author] = {
-                    "friendme": 1
-                }
-            elif "friendme" not in self.settings[server][author] or not self.settings[server][author]["friendme"]:
-                self.settings[server][author]["friendme"] = 1
-            else:
-                self.settings[server][author]["friendme"] = 0
-                message = "You have said you no longer want to receive random friend requests from this server"
-            dataIO.save_json("data/untappd/settings.json", self.settings)
-        await self.bot.say(message)
+    # This code was part of an enhancement that is no longer needed
+    # @untappd.command(pass_context=True, no_pm=True)
+    # async def friendme(self, ctx):
+    #     """Toggles whether you are interested in random friend requests from this Discord server"""
+    #     message = "This command is only available in a server, not in a PM."
+    #     if ctx.message.server:
+    #         server = ctx.message.server.id
+    #         if server not in self.settings:
+    #             self.settings[server] = {}
+    #         author = ctx.message.author.id
+    #         message = "You just said you'd like to receive random friend requests from this server"
+    #         if author not in self.settings[server]:
+    #             self.settings[server][author] = {
+    #                 "friendme": 1
+    #             }
+    #         elif "friendme" not in self.settings[server][author] or not self.settings[server][author]["friendme"]:
+    #             self.settings[server][author]["friendme"] = 1
+    #         else:
+    #             self.settings[server][author]["friendme"] = 0
+    #             message = "You have said you no longer want to receive random friend requests from this server"
+    #         dataIO.save_json("data/untappd/settings.json", self.settings)
+    #     await self.bot.say(message)
 
     @untappd.command(pass_context=True, no_pm=False)
     async def authme(self):
@@ -1680,11 +1681,12 @@ async def profileLookup(self, ctx, profile, limit=5):
     elif resp['meta']['code'] == 200:
         (embed, beerList) = user_to_embed(self, ctx, resp['response']['user'],
                                           limit)
-        friendly = is_friendly(self, ctx, profile)
-        if friendly:
-            embed.add_field(name="Friendly",
-                            value="Accepts friend requests from Discordians",
-                            inline=True)
+        # Coded as an enhancement request but managed through Discord means
+        # friendly = is_friendly(self, ctx, profile)
+        # if friendly:
+        #     embed.add_field(name="Friendly",
+        #                     value="Accepts friend requests from Discordians",
+        #                     inline=True)
     else:
         return "Profile query failed with code {!s} - {!s}".format(
             resp["meta"]["code"], resp["meta"]["error_detail"])
