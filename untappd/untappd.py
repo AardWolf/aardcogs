@@ -1,3 +1,5 @@
+from typing import Any, Union
+
 import aiohttp
 from datetime import datetime, timezone
 import discord
@@ -225,7 +227,7 @@ class Untappd(BaseCog):
                ).format(uid, qstr)
         j = await get_data_from_untappd(ctx, url)
         if "meta" in j:
-            if int(j["meta"]["code"]) == 200:
+            if int(j['meta']['code']) == 200:
                 # This is probably the case where it worked!
                 if "target_user" in j['response']:
                     response_str = (
@@ -241,6 +243,7 @@ class Untappd(BaseCog):
         # Send a request. Even if they're already friends
         url = ("https://api.untappd.com/v4/friend/request/{!s}?{!s}"
                ).format(uid, qstr)
+
         j = await get_data_from_untappd(ctx, url)
         if "meta" in j:
             if int(j["meta"]["code"]) == 200:
