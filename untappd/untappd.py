@@ -7,6 +7,7 @@ from redbot.core import commands
 from redbot.core import checks
 from redbot.core import Config
 import urllib.parse
+import asyncio
 # noinspection PyUnresolvedReferences
 
 # Beer: https://untappd.com/beer/<bid>
@@ -39,7 +40,6 @@ class Untappd(BaseCog):
         self.config.register_global(**default_config)
         self.channels = {}
 
-    # invalid syntax?
     @commands.group(invoke_without_command=False)
     async def groupdrink(self, ctx):
         """Settings for a drinking project"""
@@ -66,6 +66,7 @@ class Untappd(BaseCog):
     @commands.group(invoke_without_command=False)
     async def untappd(self, ctx):
         """Explicit Untappd things"""
+        # TODO: This might be sending help twice now.
         if ctx.invoked_subcommand is None:
             await ctx.send_help()
 
@@ -124,7 +125,6 @@ class Untappd(BaseCog):
     @untappd.command()
     async def authme(self, ctx):
         """Starts the authorization process for a user"""
-        # TODO: Check if already authorized and confirm to reauth
         auth_url = ("https://untappd.com/oauth/authenticate/?client_id="
                     "{!s}&response_type=token&redirect_url={!s}").format(
                         await self.config.client_id(),
@@ -150,12 +150,18 @@ class Untappd(BaseCog):
             author = ctx.message.author.id
             await self.config.set_raw(author, "token", value=keyword)
             await ctx.author.send("Token saved, thank you")
-            await ctx.message.delete()
+            if isinstance(ctx.message.channel, discord.TextChannel):
+                try:
+                    await ctx.message.delete()
+                except discord.Forbidden:
+                    await ctx.author.send("I tried to remove your token message because it was in a public channel"
+                                          " but was not allowed to. You should delete it.")
+                else:
+                    await ctx.author.send("I removed your token because it was in a public channel")
 
     @untappd.command()
     async def unauthme(self, ctx):
         """Removes the authorization token for a user"""
-        # TODO: Check if already authorized and confirm to reauth
         author = ctx.author.id
         try:
             await self.config.get_raw(author)  # Will throw KeyError if author not in config
@@ -1435,14 +1441,17 @@ async def get_checkins(config, ctx, channels, profile: str = None,
             resp["meta"]["error_detail"]
             )
 
-    if resp["response"]["checkins"]["count"] == 1:
-        embed = await checkin_to_embed(
-            config, ctx, channels, resp["response"]["checkins"]["items"][0])
-    elif resp["response"]["checkins"]["count"] > 1:
-        checkins = resp["response"]["checkins"]["items"]
-        checkin_text = checkins_to_string(count, checkins)
-        checkin_list = checkins
-        embed = discord.Embed(title=profile, description=checkin_text[:2048])
+    try:
+        if resp["response"]["checkins"]["count"] == 1:
+            embed = await checkin_to_embed(
+                config, ctx, channels, resp["response"]["checkins"]["items"][0])
+        elif resp["response"]["checkins"]["count"] > 1:
+            checkins = resp["response"]["checkins"]["items"]
+            checkin_text = checkins_to_string(count, checkins)
+            checkin_list = checkins
+            embed = discord.Embed(title=profile, description=checkin_text[:2048])
+    except KeyError:
+        return "No checkins found for user"
 
     result = dict()
     result["embed"] = embed
@@ -1495,7 +1504,7 @@ async def search_beer_to_embed(config, ctx, channels, query, limit=None):
         beers = beers['items']
         for num, beer in zip(range(list_limit),
                              beers):
-            result_text += ctx.cog.emoji[num+1] + " "
+            result_text += EMOJI[num+1] + " "
             result_text += str(beer['beer']['bid']) + ". ["
             result_text += beer['beer']['beer_name'] + "]"
             result_text += "(" + "https://untappd.com/beer/"
@@ -1675,9 +1684,15 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
         emoji.append(EMOJI[num])
         await message.add_reaction(EMOJI[num])
 
-    react, user = await client.wait_for(
-        message=message, timeout=timeout, emoji=emoji, user=ctx.author)
-    if react is None:
+    def check(reaction, person):
+        if reaction.emoji and reaction.emoji in emoji:
+            return person == ctx.author
+        return False
+
+    try:
+        react, user = await client.wait_for(
+            'reaction_add', timeout=timeout, check=check)
+    except asyncio.TimeoutError:
         # await ctx.send("Timed out, cleaning up")
         try:
             try:
@@ -1687,26 +1702,27 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
                     await message.remove_reaction(e, client.user)
         except discord.Forbidden:
             pass
-        if reacted:
-            # Somebody reacted so can remove the message
-            try:
-                await message.delete_message()
-            except discord.Forbidden:
-                await ctx.send("I wanted to clean up but I am not allowed")
-
         return None
-    reacts = {v: k for k, v in EMOJI.items()}
-    react = reacts[react.reaction.emoji]
-    react -= 1
-    if len(beer_list) > react:
-        new_embed = ""
-        if type_ == "beer":
-            new_embed = await lookup_beer(config, ctx, channels,
-                                          beer_list[react])
-        elif type_ == "checkin":
-            new_embed = await checkin_to_embed(config, ctx, channels, beer_list[react])
-        if isinstance(new_embed, discord.Embed):
-            await ctx.send(embed=new_embed)
+    else:
+        # Somebody reacted so can remove the message
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            await ctx.send("I wanted to clean up but I am not allowed")
+
+        reacts = {v: k for k, v in EMOJI.items()}
+        react = reacts[react.emoji]
+        react -= 1
+        if len(beer_list) > react:
+            new_embed = ""
+            if type_ == "beer":
+                new_embed = await lookup_beer(config, ctx, channels,
+                                              beer_list[react])
+            elif type_ == "checkin":
+                new_embed = await checkin_to_embed(config, ctx, channels, beer_list[react])
+            if isinstance(new_embed, discord.Embed):
+                await ctx.send(embed=new_embed)
+        return None
 
     await embed_menu(client, config, ctx, channels, beer_list, message, timeout=timeout,
                      reacted=True, type_=type_, paging=paging)
