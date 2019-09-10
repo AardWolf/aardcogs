@@ -669,7 +669,7 @@ class Untappd(BaseCog):
 
         if ctx.message.mentions:
             # If user has set a nickname, use that - but only if it's not a PM
-            if ctx.message.channel.guild:
+            if ctx.guild:
                 user = ctx.message.mentions[0]
                 try:
                     profile = await self.config.get_raw(guild, user.id, "nick")
