@@ -1,10 +1,12 @@
 import discord
 from discord.ext import commands
-from cogs.utils import checks
+from redbot.core import commands
+from redbot.core import checks
+from redbot.core import Config
 import sqlite3
 import os
+
 # noinspection PyUnresolvedReferences
-from __main__ import send_cmd_help
 
 db_version = 1.0
 
@@ -23,7 +25,7 @@ db_version = 1.0
 """
 
 
-class Traderep:
+class Traderep(commands.Cog):
     """Cog to manage trade reputation amongst Discordians"""
 
     def __init__(self, bot):
@@ -35,28 +37,26 @@ class Traderep:
                     pass_context=True)
     async def traderep(self, ctx):
         """Trade Reputation commands"""
-        if ctx.invoked_subcommand is None:
-            await send_cmd_help(ctx)
 
     @traderep.command(name="start", pass_context=True, no_pm=True)
     async def trade_start(self, ctx, partner: discord.Member):
         """Starts a trade between the person executing the command and the person mentioned"""
-        await self.bot.send_typing(ctx.message.channel)
+        await ctx.channel.trigger_typing()
         if partner.id == ctx.message.author.id:
-            await self.bot.say("You can't trade with yourself, that's a 0-sum game!")
+            await ctx.send("You can't trade with yourself, that's a 0-sum game!")
             return
         cur = self.connection.cursor()
         cur.execute("SELECT count(*) from tradeperson tp join trade t on t.tradenum = tp.tradenum "
                     "WHERE tp.person = ? and tp.partner = ? and t.status is null", (ctx.message.author.id, partner.id))
         counts = cur.fetchone()
         if counts[0] >= 1:
-            await self.bot.say("You already have a trade open with {}".format(partner.display_name))
+            await ctx.send("You already have a trade open with {}".format(partner.display_name))
             return
         try:
             cur.execute("INSERT INTO trade(initiator, start_time) values ({}, 'now')"
                         .format(ctx.message.author.id))
         except sqlite3.OperationalError as e:
-            await self.bot.say("There's a problem right now: {}".format(e))
+            await ctx.send("There's a problem right now: {}".format(e))
             return
         trade_num = cur.lastrowid
         if trade_num:
@@ -70,17 +70,17 @@ class Traderep:
                                 partner.id
                             )))
             except sqlite3.OperationalError as e:
-                await self.bot.say("There's a problem right now: {}".format(e))
+                await ctx.send("There's a problem right now: {}".format(e))
                 return
-            await self.bot.say("Trade between {} and {} initiated as trade id: **{}**".format(
+            await ctx.send("Trade between {} and {} initiated as trade id: **{}**".format(
                 partner.mention, ctx.message.author.mention, trade_num))
         else:
-            await self.bot.say("Something very bad happened and I didn't get a trade number, try again?")
+            await ctx.send("Something very bad happened and I didn't get a trade number, try again?")
 
     @traderep.command(name="done", aliases=["complete", "finish"], pass_context=True, no_pm=True, hidden=True)
     async def trade_complete(self, ctx, trade_num: int):
         """Marks a trade as done. Obsoleted"""
-        await self.bot.say("This command is no longer used, just rep the person")
+        await ctx.send("This command is no longer used, just rep the person")
         return
 
     @traderep.command(name="cancel", aliases=["stop"], pass_context=True, no_pm=True)
@@ -96,7 +96,7 @@ class Traderep:
             trade_who = mentions[0].id
         cur = self.connection.cursor()
         if trade_who:
-            trade_person = ctx.message.server.get_member(trade_who)
+            trade_person = await self.get_user_by_id(ctx, trade_who)
             cur.execute("SELECT partner, t.tradenum from tradeperson tp join trade t on t.tradenum = tp.tradenum "
                         "where tp.person = ? and tp.partner = ? and t.status is null",
                         (ctx.message.author.id, trade_who))
@@ -105,7 +105,7 @@ class Traderep:
                         "where t.tradenum = ? and tp.person = ? and t.status is null",
                         (trade_num, ctx.message.author.id))
         else:
-            await self.bot.say("You must provide a trade number and it can't be 0")
+            await ctx.send("You must provide a trade number and it can't be 0")
             return
         row = cur.fetchone()
         if row:
@@ -115,40 +115,40 @@ class Traderep:
                     trade_num
                 ))
                 if cur.rowcount == 1:
-                    if ctx.message.server:
-                        partner = ctx.message.server.get_member(trade_who)
+                    if ctx.guild:
+                        partner = await self.get_user_by_id(ctx, trade_who)
                     else:
-                        await self.bot.say("This command doesn't work in PM")
+                        await ctx.send("This command doesn't work in PM")
                         return
                     if partner:
-                        await self.bot.say("Trade {} between {} and {} was cancelled".format(
+                        await ctx.send("Trade {} between {} and {} was cancelled".format(
                             trade_num, ctx.message.author.mention, partner.mention
                         ))
                     else:
-                        await self.bot.say("Trade {} between you and {} was cancelled but I could not find a name "
-                                           "for that person".format(trade_num, trade_who))
+                        await ctx.send("Trade {} between you and {} was cancelled but I could not find a name "
+                                       "for that person".format(trade_num, trade_who))
                     cur.execute("INSERT INTO tradelog (logtime, who, tradenum, what) values ('now', ?, ?, ?)",
                                 (ctx.message.author.id, trade_num, "Author cancelled trade {} with {}".format(
                                     trade_num, row[0]
                                 )))
                 else:
-                    await self.bot.say("I was unable to cancel trade number {}".format(trade_num))
+                    await ctx.send("I was unable to cancel trade number {}".format(trade_num))
             else:
-                await self.bot.say("Either trade {} didn't involve you or it isn't open".format(trade_num))
+                await ctx.send("Either trade {} didn't involve you or it isn't open".format(trade_num))
         else:
             if arg.isdigit():
-                await self.bot.say("Either trade {} didn't involve you or it isn't open".format(trade_num))
+                await ctx.send("Either trade {} didn't involve you or it isn't open".format(trade_num))
             elif trade_person:
-                await self.bot.say("It doesn't look like you have an open trade with {}".format(
+                await ctx.send("It doesn't look like you have an open trade with {}".format(
                     trade_person.display_name))
             else:
-                await self.bot.say("Pretty sure that trade doesn't exist or is complete")
+                await ctx.send("Pretty sure that trade doesn't exist or is complete")
 
     @traderep.command(name="rep", pass_context=True, no_pm=True)
     async def rep(self, ctx, arg):
         """Reps a trading partner for a trade. Closes trade"""
         if not arg:
-            await self.bot.say("Maybe you only have one trade open but I don't want to risk it, be specific.")
+            await ctx.send("Maybe you only have one trade open but I don't want to risk it, be specific.")
             return
         mentions = ctx.message.mentions
         cur = self.connection.cursor()
@@ -183,10 +183,10 @@ class Traderep:
                     if row and row[0]:
                         trade_num = row[0]
                     else:
-                        await self.bot.say("I tried but couldn't figure out which trade you meant")
+                        await ctx.send("I tried but couldn't figure out which trade you meant")
                         return
         else:
-            await self.bot.say("I don't know what you're trying to do.")
+            await ctx.send("I don't know what you're trying to do.")
             return
         # Find the open trade number
         cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
@@ -204,41 +204,42 @@ class Traderep:
                     did_close = True
                 cur.execute("update tradeperson set rep = 1, rep_time = 'now' where tradenum = ? and "
                             "person = ? and partner = ?", (trade_num, ctx.message.author.id, row[1]))
-                if ctx.message.server:
-                    partner = ctx.message.server.get_member(trade_who)
+                if ctx.guild:
+                    # partner = ctx.guild.get_member(trade_who)
+                    partner = await self.get_user_by_id(ctx, trade_who)
                 else:
-                    await self.bot.say("This command doesn't work in PM")
+                    await ctx.send("This command doesn't work in PM")
                     return
                 if partner:
                     if did_close:
-                        await self.bot.say("You closed trade {} and repped {} for it. It's their turn to rep you"
-                                           .format(trade_num, partner.mention))
+                        await ctx.send("You closed trade {} and repped {} for it. It's their turn to rep you"
+                                       .format(trade_num, partner.mention))
                     else:
-                        await self.bot.say("You repped {} for trade {}.".format(
+                        await ctx.send("You repped {} for trade {}.".format(
                             partner.mention, trade_num
                         ))
                 else:
                     if did_close:
-                        await self.bot.say("You closed trade {} and repped {} for it. It's their turn to rep you"
-                                           .format(trade_num, row[0]))
+                        await ctx.send("You closed trade {} and repped {} for it. It's their turn to rep you..."
+                                       .format(trade_num, trade_who))
                     else:
-                        await self.bot.say("You repped {} for trade {} and that should mean all reps complete.".format(
-                            row[0], trade_num
+                        await ctx.send("You repped {} for trade {} and that should mean all reps complete...".format(
+                            trade_who, trade_num
                         ))
                 cur.execute("INSERT INTO tradelog (logtime, who, tradenum, what) values ('now', ?, ?, ?)",
                             (ctx.message.author.id, trade_num, "Author repped {} for  trade {}".format(
-                                row[0], trade_num
+                                trade_who, trade_num
                             )))
             else:
-                await self.bot.say("I didn't find a trade matching that description which involved you")
+                await ctx.send("I didn't find a trade matching that description which involved you")
         else:
-            await self.bot.say("I didn't find a trade matching that description which involved you")
+            await ctx.send("I didn't find a trade matching that description which involved you")
 
     @traderep.command(name="derep", pass_context=True, no_pm=True)
     async def derep(self, ctx, arg):
         """Dings a trading partner for messing up a trade"""
         if not arg:
-            await self.bot.say("Maybe you only have one trade open but I don't want to risk it, be specific.")
+            await ctx.send("Maybe you only have one trade open but I don't want to risk it, be specific.")
             return
         mentions = ctx.message.mentions
         cur = self.connection.cursor()
@@ -272,10 +273,10 @@ class Traderep:
                     if row and row[0]:
                         trade_num = row[0]
                     else:
-                        await self.bot.say("I tried but couldn't figure out which trade you meant")
+                        await ctx.send("I tried but couldn't figure out which trade you meant")
                         return
         else:
-            await self.bot.say("I don't know what you're trying to do.")
+            await ctx.send("I don't know what you're trying to do.")
             return
         # Find the open trade number
         cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
@@ -292,35 +293,35 @@ class Traderep:
                     did_close = True
                 cur.execute("update tradeperson set rep = -1, rep_time = 'now' where tradenum = ? and "
                             "person = ? and partner = ?", (trade_num, ctx.message.author.id, row[1]))
-                if ctx.message.server:
-                    partner = ctx.message.server.get_member(trade_who)
+                if ctx.guild:
+                    partner = await self.get_user_by_id(ctx, trade_who)
                 else:
-                    await self.bot.say("This command doesn't work in PM")
+                    await ctx.send("This command doesn't work in PM")
                     return
                 if partner:
                     if did_close:
-                        await self.bot.say("You closed trade {} and derepped {} for it. It's their turn"
-                                           .format(trade_num, partner.mention))
+                        await ctx.send("You closed trade {} and derepped {} for it. It's their turn"
+                                       .format(trade_num, partner.mention))
                     else:
-                        await self.bot.say("You derepped {} for trade {}.".format(
+                        await ctx.send("You derepped {} for trade {}.".format(
                             partner.mention, trade_num
                         ))
                 else:
                     if did_close:
-                        await self.bot.say("You closed trade {} and derepped {} for it. It's their turn"
-                                           .format(trade_num, row[0]))
+                        await ctx.send("You closed trade {} and derepped {} for it. It's their turn"
+                                       .format(trade_num, trade_who))
                     else:
-                        await self.bot.say("You derepped {} for trade {} and that should mean all reps complete.".format(
+                        await ctx.send("You derepped {} for trade {} and that should mean all reps complete.".format(
                             row[0], trade_num
                         ))
                 cur.execute("INSERT INTO tradelog (logtime, who, tradenum, what) values ('now', ?, ?, ?)",
                             (ctx.message.author.id, trade_num, "Author derepped {} for  trade {}".format(
-                                row[0], trade_num
+                                trade_who, trade_num
                             )))
             else:
-                await self.bot.say("I didn't find a trade matching that description which involved you")
+                await ctx.send("I didn't find a trade matching that description which involved you")
         else:
-            await self.bot.say("I didn't find a trade matching that description which involved you")
+            await ctx.send("I didn't find a trade matching that description which involved you")
 
     @traderep.command(name="report", aliases=["profile", "status"], pass_context=True, no_pm=True)
     async def report(self, ctx, *, args="0"):
@@ -336,17 +337,17 @@ class Traderep:
         elif args.isdigit():
             id_to_use = args
         else:
-            user = ctx.message.server.get_member_named(args)
+            user = ctx.guild.get_member_named(args)
             if user:
                 id_to_use = user.id
             else:
-                await self.bot.say("I could not find {}".format(args))
+                await ctx.send("I could not find {}".format(args))
                 return
 
         if not id_to_use:
             id_to_use = ctx.message.author.id
 
-        user = ctx.message.server.get_member(id_to_use)
+        user = await self.get_user_by_id(ctx, id_to_use)
         cur = self.connection.cursor()
         cur.execute("SELECT count(t.tradenum), sum(rep) from tradeperson tp join trade t on t.tradenum = tp.tradenum"
                     " where partner = {} and rep is not null and t.status = 1".format(id_to_use))
@@ -386,7 +387,7 @@ class Traderep:
             rows = cur.fetchmany(size=10)
             name_str = ""
             for row in rows:
-                user = ctx.message.server.get_member(row[1])
+                user = await self.get_user_by_id(ctx, row[1])
                 if user:
                     name_str += "{} ({}), ".format(user.display_name, row[0])
                 else:
@@ -404,7 +405,9 @@ class Traderep:
             rows = cur.fetchmany(size=10)
             name_str = ""
             for row in rows:
-                user = ctx.message.server.get_member(row[1])
+                # user = await self.bot.fetch_user(row[1])
+                user = await self.get_user_by_id(ctx, row[1])
+
                 if user:
                     name_str += "{} ({}), ".format(user.display_name, row[0])
                 else:
@@ -421,7 +424,7 @@ class Traderep:
             rows = cur.fetchmany(size=10)
             name_str = ""
             for row in rows:
-                user = ctx.message.server.get_member(row[0])
+                user = await self.get_user_by_id(ctx, row[0])
                 if user:
                     name_str += "{} ({}), ".format(user.display_name, row[1])
                 else:
@@ -438,7 +441,7 @@ class Traderep:
             rows = cur.fetchmany(size=10)
             name_str = ""
             for row in rows:
-                user = ctx.message.server.get_member(row[0])
+                user = await self.get_user_by_id(ctx, row[0])
                 if user:
                     name_str += "{} ({}), ".format(user.display_name, row[1])
                 else:
@@ -449,7 +452,23 @@ class Traderep:
             status_str += "Isn't waiting on rep. "
 
         report_str += status_str
-        await self.bot.say(report_str)
+        await ctx.send(report_str)
+
+    async def get_user_by_id(self, ctx, id_to_find):
+        """Takes an ID and tries multiple ways to get the user"""
+        user = ctx.guild.get_member(id_to_find)
+        if not user:
+            try:
+                user = await ctx.guild.fetch_member(id_to_find)
+            except discord.errors.NotFound:
+                pass
+        if not user:
+            try:
+                user = await ctx.bot.fetch_user(id_to_find)
+            except discord.errors.NotFound:
+                pass
+
+        return user
 
 
 def check_folders():
