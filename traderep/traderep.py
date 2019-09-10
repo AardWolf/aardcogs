@@ -1,6 +1,6 @@
 import discord
-from discord.ext import commands
 from redbot.core import commands
+from redbot.core.data_manager import cog_data_path
 from redbot.core import checks
 from redbot.core import Config
 import sqlite3
@@ -30,7 +30,10 @@ class Traderep(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.connection = sqlite3.connect("data/traderep/traderep.db")
+        self.path = cog_data_path(self)
+        self.db = self.path / "traderep.db"
+        check_files(self.db)
+        self.connection = sqlite3.connect(self.db)
         self.connection.isolation_level = None
 
     @commands.group(no_pm=False, invoke_without_command=False,
@@ -477,17 +480,16 @@ def check_folders():
         os.makedirs("data/traderep")
 
 
-def check_files():
-    f = "data/traderep/traderep.db"
-    if os.path.exists(f):
-        con = sqlite3.connect(f)
+def check_files(file):
+    if os.path.exists(file):
+        con = sqlite3.connect(file)
         cursor = con.cursor()
         cursor.execute("select max(level) from version")
         indb_version = cursor.fetchone()
         if indb_version[0] < db_version:
             db_upgrade(con, indb_version)
     else:
-        con = sqlite3.connect(f)
+        con = sqlite3.connect(file)
         con.isolation_level = None
         new_database(con)
 
@@ -519,7 +521,4 @@ def db_upgrade(con, old_version):
 
 
 def setup(bot):
-    check_folders()
-    check_files()
-
     bot.add_cog(Traderep(bot))
