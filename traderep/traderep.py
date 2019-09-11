@@ -518,7 +518,3 @@ def db_upgrade(con, old_version):
     # Note for future: create a new table, copy /change data to it, drop old table, create table, copy data
     if old_version < db_version:
         print("Database is at {} but don't know how to upgrade to {}".format(old_version, db_version))
-
-
-def setup(bot):
-    bot.add_cog(Traderep(bot))
