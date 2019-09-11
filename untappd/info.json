@@ -1,9 +1,9 @@
 {
-	"AUTHOR" : "Aardwolf98",
-	"SHORT" : "Perform simple Untappd lookups in chat",
-	"DESCRIPTION" : "Allows simple commands for looking up beers and people within discord",
-	"DISABLED" : false,
-	"NAME" : "Untappd",
-	"TAGS" : ["untappd", "beer"],
-	"INSTALL_MSG" : "Needs to be set up with an API key, https://untappd.com/api/dashboard to apply for yours and use the [p]untappd_apikey command to set it"
+	"author" : "Aardwolf98",
+	"short" : "Perform simple Untappd lookups in chat",
+	"description" : "Allows simple commands for looking up beers and people within discord",
+	"disabled" : false,
+	"name" : "Untappd",
+	"tags" : ["untappd", "beer"],
+	"install_msg" : "Needs to be set up with an API key, https://untappd.com/api/dashboard to apply for yours and use the [p]untappd_apikey command to set it"
 }
