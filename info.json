@@ -1,7 +1,7 @@
 {
-    "AUTHOR" : "Aardwolf98",
-    "INSTALL_MSG" : "Thank you for trying out my repository. It's pretty niche so I'm interested in why you would have stumbled upon it.",
-    "NAME" : "AardCogs",
-    "SHORT" : "Just Untappd",
-    "DESCRIPTION" : "Just an interface between Discord and Untappd, useful for amusing the drinkers in your server."
+    "author" : "Aardwolf98",
+    "install_msg" : "Thank you for trying out my repository. It's pretty niche so I'm interested in why you would have stumbled upon it.",
+    "name" : "AardCogs",
+    "short" : "Just Untappd",
+    "description" : "Just an interface between Discord and Untappd, useful for amusing the drinkers in your server."
 }
