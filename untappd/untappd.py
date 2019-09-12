@@ -8,6 +8,7 @@ from redbot.core import checks
 from redbot.core import Config
 import urllib.parse
 import asyncio
+
 # noinspection PyUnresolvedReferences
 
 # Beer: https://untappd.com/beer/<bid>
@@ -43,8 +44,7 @@ class Untappd(BaseCog):
     @commands.group(invoke_without_command=False)
     async def groupdrink(self, ctx):
         """Settings for a drinking project"""
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
+        pass
 
     @groupdrink.command()
     @commands.guild_only()
@@ -67,8 +67,7 @@ class Untappd(BaseCog):
     async def untappd(self, ctx):
         """Explicit Untappd things"""
         # TODO: This might be sending help twice now.
-        if ctx.invoked_subcommand is None:
-            await ctx.send_help()
+        pass
 
     @untappd.command()
     @checks.mod_or_permissions(manage_messages=True)
@@ -127,9 +126,9 @@ class Untappd(BaseCog):
         """Starts the authorization process for a user"""
         auth_url = ("https://untappd.com/oauth/authenticate/?client_id="
                     "{!s}&response_type=token&redirect_url={!s}").format(
-                        await self.config.client_id(),
-                        "https://aardwolf.github.io/tokenrevealer.html"
-                    )
+            await self.config.client_id(),
+            "https://aardwolf.github.io/tokenrevealer.html"
+        )
         auth_string = ("Please authenticate with untappd then follow the"
                        " instructions on [this page]"
                        "({!s}) using the proper prefix").format(auth_url)
@@ -239,7 +238,7 @@ class Untappd(BaseCog):
                     response_str = (
                         "You accepted a friend request from {!s}!"
                         " Now you can toast them and stalk them better."
-                        ).format(j['response']['target_user']['user_name'])
+                    ).format(j['response']['target_user']['user_name'])
                     await ctx.send(response_str)
                 else:
                     response_str = "I think you accepted a request "
@@ -262,9 +261,9 @@ class Untappd(BaseCog):
                     response_str = (
                         "I think you sent a request but I "
                         "didn't get the response I expected: {!s} / {!s}"
-                        ).format(
-                            j["meta"]["code"], j["meta"]["error_detail"]
-                        )
+                    ).format(
+                        j["meta"]["code"], j["meta"]["error_detail"]
+                    )
                 await ctx.send(response_str)
             else:
                 if "meta" in j:
@@ -332,8 +331,8 @@ class Untappd(BaseCog):
         if beerid:
             # Attempt to add to the wishlist
             if "access_token" not in keys:
-                return("You have not authorized the bot to act as you, use"
-                       "`untappd authme` to start the process")
+                return ("You have not authorized the bot to act as you, use"
+                        "`untappd authme` to start the process")
 
             keys["bid"] = beerid
             qstr = urllib.parse.urlencode(keys)
@@ -353,7 +352,7 @@ class Untappd(BaseCog):
                         beer = j['response']['beer']['beer']
                         beer['brewery'] = j['response']['beer']['brewery']
                         embed = beer_to_embed(beer)
-                        await ctx.send("Beer added to wishlist", embed=embed)
+                        await ctx.message.add_reaction('✅')
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await ctx.send("I'm fairly certain that is already on your list, go find it already!")
@@ -441,7 +440,7 @@ class Untappd(BaseCog):
                         beer = j['response']['beer']['beer']
                         beer['brewery'] = j['response']['beer']['brewery']
                         embed = beer_to_embed(beer)
-                        await ctx.send("Beer removed from wishlist", embed=embed)
+                        await ctx.message.add_reaction('✅')
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await ctx.send("Are you sure that was on your wishlist? It's still there if it was")
@@ -486,8 +485,8 @@ class Untappd(BaseCog):
             if isinstance(beers, str):
                 await ctx.send(
                     "Lookup of `{!s}` didn't result in a beer list: {!s}".
-                    format(keywords, beers)
-                    )
+                        format(keywords, beers)
+                )
                 return
             elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
@@ -506,11 +505,11 @@ class Untappd(BaseCog):
             if beer["stats"]["user_count"]:
                 response += ("You have had '**{!s}**' by **{!s}** {!s} "
                              "time{!s}").format(
-                                  beer["beer_name"],
-                                  beer["brewery"]["brewery_name"],
-                                  beer["stats"]["user_count"],
-                                  add_s(beer["stats"]["user_count"])
-                              )
+                    beer["beer_name"],
+                    beer["brewery"]["brewery_name"],
+                    beer["stats"]["user_count"],
+                    add_s(beer["stats"]["user_count"])
+                )
                 if beer["auth_rating"]:
                     response += " and you gave it {!s} cap{!s}.".format(
                         beer["auth_rating"],
@@ -524,9 +523,9 @@ class Untappd(BaseCog):
             else:
                 response += ("You have never had '**{!s}**' by **{!s}**"
                              ).format(
-                                  beer["beer_name"],
-                                  beer["brewery"]["brewery_name"]
-                              )
+                    beer["beer_name"],
+                    beer["brewery"]["brewery_name"]
+                )
                 if beer["stats"]["total_user_count"]:
                     response += " but {!s} other people have.".format(
                         human_number(beer["stats"]["total_user_count"])
@@ -623,7 +622,7 @@ class Untappd(BaseCog):
                            "and should use the `untappd_apikey` command")
             return
 
-#        await ctx.send("I got a user " + profile)
+        #        await ctx.send("I got a user " + profile)
         if ctx.message.mentions:
             # If user has set a nickname, use that - but only if it's not a PM
             if ctx.guild:
@@ -758,11 +757,7 @@ class Untappd(BaseCog):
                            "which to toast.")
             return
 
-        embed = await do_toast(self.config, ctx, checkin=checkin)
-        if isinstance(embed, str):
-            await ctx.send(embed)
-        else:
-            await ctx.send("", embed=embed)
+        await do_toast(self.config, ctx, checkin=checkin)
 
     @commands.command()
     async def checkin(self, ctx, *keywords):
@@ -913,8 +908,8 @@ class Untappd(BaseCog):
             if isinstance(beers, str):
                 await ctx.send(
                     "Lookup of `{!s}` didn't result in a beer list: {!s}".
-                    format(keywords, beers)
-                    )
+                        format(keywords, beers)
+                )
                 return
             elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
@@ -1041,7 +1036,7 @@ class Untappd(BaseCog):
                 await ctx.send("Lookup failed with {!s} - {!s}".format(
                     j["meta"]["code"],
                     j["meta"]["error_detail"]
-                    ))
+                ))
                 return
 
             if isinstance(j["response"]["checkins"]["items"], list):
@@ -1277,10 +1272,10 @@ def beer_to_embed(beer, rating=None):
     else:
         beer_ts = datetime.now(timezone.utc)
     embed = discord.Embed(title="by {!s}".format(
-                              beer['brewery']['brewery_name']),
-                          description=beer['beer_description'][:2048],
-                          url=brewery_url,
-                          timestamp=beer_ts)
+        beer['brewery']['brewery_name']),
+        description=beer['beer_description'][:2048],
+        url=brewery_url,
+        timestamp=beer_ts)
     embed.set_author(name=beer_title,
                      url=beer_url,
                      icon_url=beer['brewery']['brewery_label'])
@@ -1354,8 +1349,8 @@ async def do_toast(config, ctx, checkin: int):
     # keys["client_id"] = await self.config.client_id()
     # keys["access_token"] = auth_token
     if "access_token" not in keys:
-        return("You have not authorized the bot to act as you, use"
-               "`untappd authme` to start the process")
+        return ("You have not authorized the bot to act as you, use"
+                "`untappd authme` to start the process")
 
     qstr = urllib.parse.urlencode(keys)
     url = "https://api.untappd.com/v4/checkin/toast/{!s}?{!s}".format(
@@ -1365,23 +1360,23 @@ async def do_toast(config, ctx, checkin: int):
 
     resp = await get_data_from_untappd(ctx, url)
     if resp['meta']['code'] == 500:
-        return ("Toast failed, probably because you "
-                "aren't friends with this person. Fix this by using "
-                "`untappd friend <person>`")
+        await ctx.send("Toast failed, probably because you "
+                       "aren't friends with this person. Fix this by using "
+                       "`untappd friend <person>`")
     elif resp["meta"]["code"] == 200:
         if "result" in resp["response"]:
             if resp["response"]["result"] == "success":
                 if resp["response"]["like_type"] == "toast":
-                    return "Toasted {!s}!".format(checkin)
+                    await ctx.message.add_reaction('✅')
                 elif resp["response"]["like_type"] == "un-toast":
-                    return "Toast rescinded from {!s}!".format(checkin)
+                    await ctx.message.add_reaction('\N{Cross Mark}')
         else:
-            return "Toast failed for some reason"
+            await ctx.send("Toast failed for some reason")
     else:
         # print("Lookup failed for url: "+url)
-        return "Toast failed with {!s} - {!s}".format(
+        await ctx.send("Toast failed with {!s} - {!s}".format(
             resp["meta"]["code"],
-            resp["meta"]["error_detail"])
+            resp["meta"]["error_detail"]))
 
 
 async def get_checkin(config, ctx, channels, checkin: int, auth_token: str = None):
@@ -1439,7 +1434,7 @@ async def get_checkins(config, ctx, channels, profile: str = None,
         return "Lookup failed with {!s} - {!s}".format(
             resp["meta"]["code"],
             resp["meta"]["error_detail"]
-            )
+        )
 
     try:
         if resp["response"]["checkins"]["count"] == 1:
@@ -1470,7 +1465,7 @@ async def search_beer(config, ctx, query, limit=None):
     qstr = urllib.parse.urlencode(keys)
 
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
-#    print(url)
+    #    print(url)
     resp = await get_data_from_untappd(ctx, url)
     if resp["meta"]["code"] == 200:
         return resp['response']['beers']
@@ -1504,16 +1499,16 @@ async def search_beer_to_embed(config, ctx, channels, query, limit=None):
         beers = beers['items']
         for num, beer in zip(range(list_limit),
                              beers):
-            result_text += EMOJI[num+1] + " "
+            result_text += EMOJI[num + 1] + " "
             result_text += str(beer['beer']['bid']) + ". ["
             result_text += beer['beer']['beer_name'] + "]"
             result_text += "(" + "https://untappd.com/beer/"
             result_text += str(beer['beer']['bid']) + ") "
             brewery = ("by *[{!s}](https://untappd.com/w/"
                        "{!s}/{!s})*").format(
-                        beer['brewery']['brewery_name'],
-                        beer['brewery']['brewery_slug'],
-                        beer['brewery']['brewery_id'])
+                beer['brewery']['brewery_name'],
+                beer['brewery']['brewery_slug'],
+                beer['brewery']['brewery_id'])
             result_text += brewery
             if beer['beer']['auth_rating']:
                 result_text += " ({!s})".format(
@@ -1587,7 +1582,7 @@ and a checkin list"""
         flair_str += await config.moderator_emoji()
     embed = discord.Embed(title=name_str,
                           description=recent_message[:2048]
-                          or "No recent beers visible",
+                                      or "No recent beers visible",
                           url=user['untappd_url'])
     embed.add_field(
         name="Checkins",
@@ -1680,7 +1675,7 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
         await ctx.send("I didn't get a handle to an existing message.")
         return
 
-    for num, beer in zip(range(1, limit+1), beer_list):
+    for num, beer in zip(range(1, limit + 1), beer_list):
         emoji.append(EMOJI[num])
         await message.add_reaction(EMOJI[num])
 
@@ -1738,20 +1733,20 @@ def checkins_to_string(count: int, checkins: list):
                          " ({!s})\n by [{!s}]"
                          "(https://untappd.com/brewery/{!s})"
                          ).format(
-                    EMOJI[num+1],
-                    checkin["checkin_id"],
-                    checkin["beer"]["bid"],
-                    checkin["beer"]["beer_name"],
-                    checkin["beer"]["bid"],
-                    checkin["rating_score"] or "N/A",
-                    checkin["brewery"]["brewery_name"],
-                    checkin["brewery"]["brewery_id"]
-                )
+            EMOJI[num + 1],
+            checkin["checkin_id"],
+            checkin["beer"]["bid"],
+            checkin["beer"]["beer_name"],
+            checkin["beer"]["bid"],
+            checkin["rating_score"] or "N/A",
+            checkin["brewery"]["brewery_name"],
+            checkin["brewery"]["brewery_id"]
+        )
         if checkin["badges"]["count"]:
             checkin_text += " - {!s} badge{!s}".format(
                 checkin["badges"]["count"],
                 add_s(checkin["badges"]["count"])
-                )
+            )
         checkin_text += " - {!s}\n".format(time_ago(checkin["created_at"]))
     return checkin_text
 
@@ -1765,16 +1760,16 @@ async def checkin_to_embed(config, ctx, channels, checkin):
     url = "https://untappd.com/user/{!s}/checkin/{!s}".format(
         checkin["user"]["user_name"],
         checkin["checkin_id"]
-        )
+    )
     # deep_checkin_link = "[{!s}](untappd://checkin/{!s})".format(
     #    await config.app_emoji(),
     #    checkin["checkin_id"]
     # )
     title = "{!s} was drinking {!s} by {!s}".format(
-                    checkin["user"]["first_name"],
-                    checkin["beer"]["beer_name"],
-                    checkin["brewery"]["brewery_name"]
-               )
+        checkin["user"]["first_name"],
+        checkin["beer"]["beer_name"],
+        checkin["brewery"]["brewery_name"]
+    )
     # deep_beer_link = "[{!s}](untappd://beer/{!s})".format(
     #    await config.app_emoji(),
     #    checkin["beer"]["bid"]
@@ -1792,7 +1787,7 @@ async def checkin_to_embed(config, ctx, channels, checkin):
     if checkin["media"]["count"] >= 1:
         embed.set_thumbnail(
             url=checkin["media"]["items"][0]["photo"]["photo_img_md"]
-            )
+        )
     # Add fields of interest
     beer_link = "[{!s}](https://untappd.com/beer/{!s})".format(
         checkin["beer"]["beer_name"],
@@ -1844,10 +1839,10 @@ async def checkin_to_embed(config, ctx, channels, checkin):
                         value=checkin["checkin_comment"][:1024])
     if (checkin["comments"]["count"] + checkin["toasts"]["count"]) > 0:
         new_value = "{!s}({!s}){!s}({!s})".format(
-                EMOJI["comments"],
-                checkin["comments"]["count"],
-                EMOJI["beers"],
-                checkin["toasts"]["count"]
+            EMOJI["comments"],
+            checkin["comments"]["count"],
+            EMOJI["beers"],
+            checkin["toasts"]["count"]
         )
         embed.add_field(name="Flags", value=new_value)
     if checkin["badges"]["count"] > 0:
@@ -1855,9 +1850,9 @@ async def checkin_to_embed(config, ctx, channels, checkin):
         for badge in checkin["badges"]["items"]:
             badge_text += "{!s}\n".format(badge["badge_name"])
         embed.add_field(name="Badges", value=badge_text[:1024])
-#    embed.add_field(name="DeepCheckin", value=deep_checkin_link)
-#    embed.add_field(name="DeepBeer", value=deep_beer_link)
-#    embed.add_field(name="DeepBrewery", value=deep_brewery_link)
+    #    embed.add_field(name="DeepCheckin", value=deep_checkin_link)
+    #    embed.add_field(name="DeepBeer", value=deep_beer_link)
+    #    embed.add_field(name="DeepBrewery", value=deep_brewery_link)
     embed.set_footer(text="Checkin {!s} / Beer {!s}"
                      .format(checkin["checkin_id"],
                              checkin["beer"]["bid"]))
@@ -1964,7 +1959,7 @@ def brewery_location(brewery):
         if brewery["location"]["brewery_state"]:
             brewery_loca.append(
                 brewery["location"]["brewery_state"]
-                )
+            )
     if "country_name" in brewery:
         if brewery["country_name"]:
             brewery_loca.append(brewery["country_name"])
