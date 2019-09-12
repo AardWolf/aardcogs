@@ -352,7 +352,7 @@ class Untappd(BaseCog):
                         beer = j['response']['beer']['beer']
                         beer['brewery'] = j['response']['beer']['brewery']
                         embed = beer_to_embed(beer)
-                        await ctx.send("Beer added to wishlist", embed=embed)
+                        await ctx.message.add_reaction('✅')
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await ctx.send("I'm fairly certain that is already on your list, go find it already!")
@@ -440,7 +440,7 @@ class Untappd(BaseCog):
                         beer = j['response']['beer']['beer']
                         beer['brewery'] = j['response']['beer']['brewery']
                         embed = beer_to_embed(beer)
-                        await ctx.send("Beer removed from wishlist", embed=embed)
+                        await ctx.message.add_reaction('✅')
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await ctx.send("Are you sure that was on your wishlist? It's still there if it was")
