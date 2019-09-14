@@ -8,6 +8,7 @@ from redbot.core import checks
 from redbot.core import Config
 import urllib.parse
 import asyncio
+import random
 
 # noinspection PyUnresolvedReferences
 
@@ -20,6 +21,9 @@ import asyncio
 # prefix = ctx.prefix
 
 BaseCog = getattr(commands, "Cog", object)
+detoasts = ["Toast rescinded!", "Toast removed. That seems kind of harsh",
+            "You're the one that made me de-toast. Seems like a jerk move",
+            "I think you meant toast but got de-toast", "Oh, check-in not fancy enough? Toast removed"]
 
 
 class Untappd(BaseCog):
@@ -352,7 +356,9 @@ class Untappd(BaseCog):
                         beer = j['response']['beer']['beer']
                         beer['brewery'] = j['response']['beer']['brewery']
                         embed = beer_to_embed(beer)
-                        await ctx.message.add_reaction('✅')
+                        success = await add_react(ctx.message, '✅')
+                        if not success:
+                            await ctx.send("Added to your wishlist!", embed=embed)
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await ctx.send("I'm fairly certain that is already on your list, go find it already!")
@@ -440,7 +446,9 @@ class Untappd(BaseCog):
                         beer = j['response']['beer']['beer']
                         beer['brewery'] = j['response']['beer']['brewery']
                         embed = beer_to_embed(beer)
-                        await ctx.message.add_reaction('✅')
+                        success = await add_react(ctx.message, '✅')
+                        if not success:
+                            await ctx.send("Beer removed from your wishlist!", embed=embed)
                     return
                 elif int(j["meta"]["code"]) == 500:
                     await ctx.send("Are you sure that was on your wishlist? It's still there if it was")
@@ -1199,6 +1207,47 @@ class Untappd(BaseCog):
                         await ctx.send("Something went wrong adding the checkin")
 
 
+async def do_toast(config, ctx, checkin: int):
+    """Toast a specific checkin"""
+
+    keys = await get_auth(ctx, config)
+    # keys["client_id"] = await self.config.client_id()
+    # keys["access_token"] = auth_token
+    if "access_token" not in keys:
+        return ("You have not authorized the bot to act as you, use"
+                "`untappd authme` to start the process")
+
+    qstr = urllib.parse.urlencode(keys)
+    url = "https://api.untappd.com/v4/checkin/toast/{!s}?{!s}".format(
+        checkin, qstr
+    )
+    # print("Using URL: {!s}".format(url))
+
+    resp = await get_data_from_untappd(ctx, url)
+    if resp['meta']['code'] == 500:
+        await ctx.send("Toast failed, probably because you "
+                       "aren't friends with this person. Fix this by using "
+                       "`untappd friend <person>`")
+    elif resp["meta"]["code"] == 200:
+        if "result" in resp["response"]:
+            if resp["response"]["result"] == "success":
+                if resp["response"]["like_type"] == "toast":
+                    success = await add_react(ctx.message, '✅')
+                    if not success:
+                        await ctx.send("Toasted!")
+                elif resp["response"]["like_type"] == "un-toast":
+                    success = await add_react(ctx.message, '\N{Cross Mark}')
+                    if not success:
+                        await ctx.send(random.choice(detoasts))
+        else:
+            await ctx.send("Toast failed for some reason")
+    else:
+        # print("Lookup failed for url: "+url)
+        await ctx.send("Toast failed with {!s} - {!s}".format(
+            resp["meta"]["code"],
+            resp["meta"]["error_detail"]))
+
+
 async def check_credentials(config):
     """Confirms bot owner set credentials"""
     client_id = await config.client_id()
@@ -1340,43 +1389,6 @@ def beer_to_embed(beer, rating=None):
             collab_str += "... and more"
         embed.add_field(name="Collaboration with", value=collab_str[:2048])
     return embed
-
-
-async def do_toast(config, ctx, checkin: int):
-    """Toast a specific checkin"""
-
-    keys = await get_auth(ctx, config)
-    # keys["client_id"] = await self.config.client_id()
-    # keys["access_token"] = auth_token
-    if "access_token" not in keys:
-        return ("You have not authorized the bot to act as you, use"
-                "`untappd authme` to start the process")
-
-    qstr = urllib.parse.urlencode(keys)
-    url = "https://api.untappd.com/v4/checkin/toast/{!s}?{!s}".format(
-        checkin, qstr
-    )
-    # print("Using URL: {!s}".format(url))
-
-    resp = await get_data_from_untappd(ctx, url)
-    if resp['meta']['code'] == 500:
-        await ctx.send("Toast failed, probably because you "
-                       "aren't friends with this person. Fix this by using "
-                       "`untappd friend <person>`")
-    elif resp["meta"]["code"] == 200:
-        if "result" in resp["response"]:
-            if resp["response"]["result"] == "success":
-                if resp["response"]["like_type"] == "toast":
-                    await ctx.message.add_reaction('✅')
-                elif resp["response"]["like_type"] == "un-toast":
-                    await ctx.message.add_reaction('\N{Cross Mark}')
-        else:
-            await ctx.send("Toast failed for some reason")
-    else:
-        # print("Lookup failed for url: "+url)
-        await ctx.send("Toast failed with {!s} - {!s}".format(
-            resp["meta"]["code"],
-            resp["meta"]["error_detail"]))
 
 
 async def get_checkin(config, ctx, channels, checkin: int, auth_token: str = None):
@@ -1984,3 +1996,14 @@ async def get_data_from_untappd(ctx, url):
                 return await resp.json()
     except aiohttp.ClientError as exc:
         return "Untappd call failed with {!s}".format(exc)
+
+
+async def add_react(message, react):
+    """Add a reaction to a message. Return whether success or not"""
+
+    try:
+        await(message.add_reaction(react))
+    except (discord.HTTPException, discord.Forbidden, discord.NotFound, discord.InvalidArgument):
+        return False
+
+    return True
