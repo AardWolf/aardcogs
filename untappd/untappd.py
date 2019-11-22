@@ -1737,8 +1737,8 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
 
 def checkins_to_string(count: int, checkins: list):
     """Takes a list of checkins and returns a string"""
-    checkin_text = ("**checkin** - **beerID** - **beer (caps)**\n\t**brewery**"
-                    " - **badges** - **when**\n")
+    # checkin_text = ("**checkin** - **beerID** - **beer (caps)**\n\t**brewery** - **badges** - **when**\n")
+    checkin_text = ""
     for num, checkin in zip(range(count), checkins):
         checkin_text += ("{!s} [{!s}](https://untappd.com/beer/{!s}) ({!s}) [{!s}] by "
                          "[{!s}](https://untappd.com/brewery/{!s})"
