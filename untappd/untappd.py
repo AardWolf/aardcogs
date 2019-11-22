@@ -1737,29 +1737,23 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
 
 def checkins_to_string(count: int, checkins: list):
     """Takes a list of checkins and returns a string"""
-    checkin_text = ("**checkin** - **beerID** - **beer (caps)**\n\t**brewery**"
-                    " - **badges** - **when**\n")
+    # checkin_text = ("**checkin** - **beerID** - **beer (caps)**\n\t**brewery** - **badges** - **when**\n")
+    checkin_text = ""
     for num, checkin in zip(range(count), checkins):
-        checkin_text += ("{!s}{!s} - {!s} - "
-                         "[{!s}](https://untappd.com/beer/{!s})"
-                         " ({!s})\n by [{!s}]"
-                         "(https://untappd.com/brewery/{!s})"
+        checkin_text += ("{!s} [{!s}](https://untappd.com/beer/{!s}) ({!s}) [{!s}] by "
+                         "[{!s}](https://untappd.com/brewery/{!s})"
                          ).format(
             EMOJI[num + 1],
-            checkin["checkin_id"],
-            checkin["beer"]["bid"],
             checkin["beer"]["beer_name"],
             checkin["beer"]["bid"],
             checkin["rating_score"] or "N/A",
+            checkin["beer"]["bid"],
             checkin["brewery"]["brewery_name"],
             checkin["brewery"]["brewery_id"]
         )
         if checkin["badges"]["count"]:
-            checkin_text += " - {!s} badge{!s}".format(
-                checkin["badges"]["count"],
-                add_s(checkin["badges"]["count"])
-            )
-        checkin_text += " - {!s}\n".format(time_ago(checkin["created_at"]))
+            checkin_text += " - {!s} badge{!s}".format(checkin["badges"]["count"], add_s(checkin["badges"]["count"]))
+        checkin_text += " - {!s} [{!s}]\n".format(time_ago(checkin["created_at"]), checkin["checkin_id"])
     return checkin_text
 
 
