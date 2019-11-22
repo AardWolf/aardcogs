@@ -752,7 +752,6 @@ class Untappd(BaseCog):
                 footer = react.message.embeds[0].footer.text
                 match = re.search('Checkin ([0-9]+) /', footer)
                 if match:
-                    print("Toasting {!s} as {!s}".format(match.group(1), person.id))
                     success = await do_toast(self.config, person, checkin=match.group(1))
                     if success:
                         try:
