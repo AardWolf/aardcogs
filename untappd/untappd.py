@@ -46,6 +46,7 @@ class Untappd(BaseCog):
         }
         self.config.register_global(**default_config)
         self.channels = {}
+        self.is_chatty = False # Lets some debugging / annoying PMs happen
 
     @commands.group(invoke_without_command=False)
     async def groupdrink(self, ctx):
@@ -753,7 +754,7 @@ class Untappd(BaseCog):
                 match = re.search('Checkin ([0-9]+) /', footer)
                 if match:
                     success = await do_toast(self.config, person, checkin=match.group(1))
-                    if success:
+                    if success && self.is_chatty:
                         try:
                             await person.send("Toasted {!s}".format(match.group(1)))
                         except (discord.Forbidden, discord.HTTPException):
