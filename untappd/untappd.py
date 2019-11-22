@@ -756,7 +756,7 @@ class Untappd(BaseCog):
                     success = await do_toast(self.config, person, checkin=match.group(1))
                     if success:
                         try:
-                            person.send("Toasted {!s}".format(match.group(1)))
+                            await person.send("Toasted {!s}".format(match.group(1)))
                         except (discord.Forbidden, discord.HTTPException):
                             return
 
