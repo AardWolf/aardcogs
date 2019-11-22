@@ -750,10 +750,10 @@ class Untappd(BaseCog):
             # Find the checkin ID to use
             if len(react.message.embeds) > 0:
                 footer = react.message.embeds[0].footer.text
-                print("Got footer: {!s}".format(footer))
                 checkin_id = re.search('Checkin ([0-9]+) /', footer)
                 if checkin_id:
-                    success = await do_toast(self.config, person, checkin_id)
+                    print("Toasting {!s} as {!s}".format(checkin_id, person.id))
+                    success = await do_toast(self.config, person, checkin=checkin_id)
                     if success:
                         try:
                             person.send("Toasted {!s}".format(checkin_id))
