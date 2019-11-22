@@ -39,6 +39,7 @@ class Untappd(BaseCog):
             "supporter_emoji": ":moneybag:",
             "moderator_emoji": ":crown:",
             "app_emoji": ":beers:",
+            "toast_emoji": ":beers:",
             "client_id": "",
             "client_secret": "",
             "CONFIG": False
