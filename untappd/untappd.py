@@ -9,6 +9,7 @@ from redbot.core import Config
 import urllib.parse
 import asyncio
 import random
+import re
 
 # noinspection PyUnresolvedReferences
 
@@ -38,12 +39,14 @@ class Untappd(BaseCog):
             "supporter_emoji": ":moneybag:",
             "moderator_emoji": ":crown:",
             "app_emoji": ":beers:",
+            "toast_emoji": ":beers:",
             "client_id": "",
             "client_secret": "",
             "CONFIG": False
         }
         self.config.register_global(**default_config)
         self.channels = {}
+        self.is_chatty = False # Lets some debugging / annoying PMs happen
 
     @commands.group(invoke_without_command=False)
     async def groupdrink(self, ctx):
@@ -114,6 +117,13 @@ class Untappd(BaseCog):
                        + str(emoji) + ")")
 
     @untappd.command()
+    @checks.mod_or_permissions(manage_messages=True)
+    async def toast_emoji(self, ctx, emoji: str):
+        """The emoji to use for super users"""
+        await self.config.toast_emoji.set(emoji)
+        await ctx.send("People who react to checkins with {!s} will be toasting!".format(emoji))
+
+    @untappd.command()
     @commands.guild_only()
     async def setnick(self, ctx, keywords):
         """Set your untappd user name to use for future commands"""
@@ -179,7 +189,7 @@ class Untappd(BaseCog):
         """Accepts existing friend requests from user specified or
         sends a friend request to the user specified"""
 
-        keys = await get_auth(ctx, self.config)
+        keys = await get_auth(ctx.author.id, self.config)
         if "access_token" not in keys:
             await ctx.send("You must first authorize me to act as you"
                            " using `untappd authme`")
@@ -214,7 +224,7 @@ class Untappd(BaseCog):
         uid = 0
         url = ("https://api.untappd.com/v4/user/info/{!s}?{!s}"
                ).format(profile, qstr)
-        j = await get_data_from_untappd(ctx, url)
+        j = await get_data_from_untappd(ctx.author, url)
         if "meta" in j:
             if int(j["meta"]["code"]) == 200:
                 if "user" in j["response"]:
@@ -234,7 +244,7 @@ class Untappd(BaseCog):
         # Step 2: Accept any pending requests
         url = ("https://api.untappd.com/v4/friend/accept/{!s}?{!s}"
                ).format(uid, qstr)
-        j = await get_data_from_untappd(ctx, url)
+        j = await get_data_from_untappd(ctx.author, url)
         if "meta" in j:
             if int(j['meta']['code']) == 200:
                 # This is probably the case where it worked!
@@ -253,7 +263,7 @@ class Untappd(BaseCog):
         url = ("https://api.untappd.com/v4/friend/request/{!s}?{!s}"
                ).format(uid, qstr)
 
-        j = await get_data_from_untappd(ctx, url)
+        j = await get_data_from_untappd(ctx.author, url)
         if "meta" in j:
             if int(j["meta"]["code"]) == 200:
                 if "target_user" in j['response']:
@@ -295,7 +305,7 @@ class Untappd(BaseCog):
                            "and should use the `untappd_apikey` command")
             return
 
-        keys = await get_auth(ctx, self.config)
+        keys = await get_auth(ctx.author.id, self.config)
         if "access_token" not in keys:
             await ctx.send("You must first authorize me to act as you"
                            " using `untappd authme`")
@@ -344,7 +354,7 @@ class Untappd(BaseCog):
                    ).format(qstr)
             # print("Using URL: {!s}".format(url))
 
-            j = await get_data_from_untappd(ctx, url)
+            j = await get_data_from_untappd(ctx.author, url)
             if "meta" in j:
                 if int(j["meta"]["code"]) == 200:
                     if default_beer:
@@ -385,7 +395,7 @@ class Untappd(BaseCog):
                            "and should use the `untappd_apikey` command")
             return
 
-        keys = await get_auth(ctx, self.config)
+        keys = await get_auth(ctx.author.id, self.config)
         if "access_token" not in keys:
             await ctx.send("You must first authorize me to act as you"
                            " using `untappd authme`")
@@ -434,7 +444,7 @@ class Untappd(BaseCog):
             url = ("https://api.untappd.com/v4/user/wishlist/delete?{!s}"
                    ).format(qstr)
 
-            j = await get_data_from_untappd(ctx, url)
+            j = await get_data_from_untappd(ctx.author, url)
             if "meta" in j:
                 if int(j["meta"]["code"]) == 200:
                     if default_beer:
@@ -471,7 +481,7 @@ class Untappd(BaseCog):
                            "and should use the `untappd_apikey` command")
             return
 
-        keys = await get_auth(ctx, self.config)
+        keys = await get_auth(ctx.author.id, self.config)
         if "access_token" not in keys:
             await ctx.send("You must first authorize me to act as you"
                            " using `untappd authme`")
@@ -725,28 +735,37 @@ class Untappd(BaseCog):
             await ctx.send("I am expecting two words, the id and "
                            "the secret only")
 
+    @commands.Cog.listener()
+    async def on_reaction_add(self, react: discord.Reaction, person: discord.User):
+        """
+        When someone reacts to a thing, process it.
+
+        :param react: The reaction object
+        :param person: The user object for the person reacting
+        """
+        emoji = react.emoji
+        # Process the emoji
+        eid = emoji.id if react.custom_emoji else str(emoji)
+        toast_emoji = await self.config.toast_emoji()
+        if emoji == toast_emoji:
+            # Find the checkin ID to use
+            if len(react.message.embeds) > 0:
+                footer = react.message.embeds[0].footer.text
+                match = re.search('Checkin ([0-9]+) /', footer)
+                if match:
+                    success = await do_toast(self.config, person, checkin=match.group(1))
+                    if success and self.is_chatty:
+                        try:
+                            await person.send("Toasted {!s}".format(match.group(1)))
+                        except (discord.Forbidden, discord.HTTPException):
+                            return
+
     @commands.command()
     async def toast(self, ctx, *keywords):
         """Toasts a checkin by number, if you're friends"""
 
         author = ctx.author
         checkin = 0
-
-        credentials = await check_credentials(self.config)
-        if not credentials:
-            await ctx.send("The owner has not set the API information "
-                           "and should use the `untappd_apikey` command")
-            return
-
-        try:
-            auth_token = await self.config.get_raw(author.id, "token")
-        except KeyError:
-            auth_token = None
-
-        if not auth_token:
-            await ctx.send(("Unable to toast until you have "
-                            "authenticated me using `untappd authme`"))
-            return
 
         for word in keywords:
             if word.isdigit():
@@ -765,7 +784,13 @@ class Untappd(BaseCog):
                            "which to toast.")
             return
 
-        await do_toast(self.config, ctx, checkin=checkin)
+        success = await do_toast(self.config, ctx.author, checkin=checkin)
+        if success:
+            success = await add_react(ctx.message, '✅')
+            if not success:
+                await ctx.send("Toasted!")
+        else:
+            await ctx.send("Toast failed for some reason you were PM'd about")
 
     @commands.command()
     async def checkin(self, ctx, *keywords):
@@ -1038,7 +1063,7 @@ class Untappd(BaseCog):
             keys["limit"] = 1
             qstr = urllib.parse.urlencode(keys)
             checkin_url += "?{!s}".format(qstr)
-            j = await get_data_from_untappd(ctx, checkin_url)
+            j = await get_data_from_untappd(ctx.author, checkin_url)
             if j["meta"]["code"] != 200:
                 # print("Lookup failed for url: "+url)
                 await ctx.send("Lookup failed with {!s} - {!s}".format(
@@ -1068,7 +1093,7 @@ class Untappd(BaseCog):
                 checkin_id, qstr
             )
 
-            j = await get_data_from_untappd(ctx, checkin_url)
+            j = await get_data_from_untappd(ctx.author, checkin_url)
             if j["meta"]["code"] != 200:
                 # print("Lookup failed for url: "+url)
                 await ctx.send("Lookup failed with {!s} - {!s}").format(
@@ -1207,10 +1232,10 @@ class Untappd(BaseCog):
                         await ctx.send("Something went wrong adding the checkin")
 
 
-async def do_toast(config, ctx, checkin: int):
+async def do_toast(config, author, checkin: int):
     """Toast a specific checkin"""
 
-    keys = await get_auth(ctx, config)
+    keys = await get_auth(author.id, config)
     # keys["client_id"] = await self.config.client_id()
     # keys["access_token"] = auth_token
     if "access_token" not in keys:
@@ -1218,34 +1243,25 @@ async def do_toast(config, ctx, checkin: int):
                 "`untappd authme` to start the process")
 
     qstr = urllib.parse.urlencode(keys)
-    url = "https://api.untappd.com/v4/checkin/toast/{!s}?{!s}".format(
-        checkin, qstr
-    )
+    url = "https://api.untappd.com/v4/checkin/toast/{!s}?{!s}".format(checkin, qstr)
     # print("Using URL: {!s}".format(url))
 
-    resp = await get_data_from_untappd(ctx, url)
+    resp = await get_data_from_untappd(author, url)
     if resp['meta']['code'] == 500:
-        await ctx.send("Toast failed, probably because you "
-                       "aren't friends with this person. Fix this by using "
-                       "`untappd friend <person>`")
+        await author.send("Toast failed, probably because you aren't friends with this person. Fix this by using "
+                          "`untappd friend <person>`")
     elif resp["meta"]["code"] == 200:
         if "result" in resp["response"]:
             if resp["response"]["result"] == "success":
                 if resp["response"]["like_type"] == "toast":
-                    success = await add_react(ctx.message, '✅')
-                    if not success:
-                        await ctx.send("Toasted!")
+                    return True
                 elif resp["response"]["like_type"] == "un-toast":
-                    success = await add_react(ctx.message, '\N{Cross Mark}')
-                    if not success:
-                        await ctx.send(random.choice(detoasts))
+                    return await do_toast(config, author, checkin)
         else:
-            await ctx.send("Toast failed for some reason")
+            await author.send("Toast failed for some reason")
     else:
         # print("Lookup failed for url: "+url)
-        await ctx.send("Toast failed with {!s} - {!s}".format(
-            resp["meta"]["code"],
-            resp["meta"]["error_detail"]))
+        await author.send("Toast failed with {!s} - {!s}".format(resp["meta"]["code"], resp["meta"]["error_detail"]))
 
 
 async def check_credentials(config):
@@ -1259,12 +1275,12 @@ def setup(bot):
     bot.add_cog(Untappd(bot))
 
 
-async def get_auth(ctx, config):
+async def get_auth(author_id, config):
     """Returns auth dictionary given a context"""
     client_id = await config.client_id()
     keys = {"client_id": client_id}
     try:
-        keys["access_token"] = await config.get_raw(ctx.author.id, "token")
+        keys["access_token"] = await config.get_raw(author_id, "token")
     except KeyError:
         keys["client_secret"] = await config.client_secret()
     return keys
@@ -1273,12 +1289,12 @@ async def get_auth(ctx, config):
 async def get_beer_by_id(config, ctx, beerid):
     """Use the untappd API to return a beer dict for a beer id"""
 
-    keys = await get_auth(ctx, config)
+    keys = await get_auth(ctx.author.id, config)
     qstr = urllib.parse.urlencode(keys)
     url = "https://api.untappd.com/v4/beer/info/{!s}?{!s}".format(
         beerid, qstr
     )
-    resp = await get_data_from_untappd(ctx, url)
+    resp = await get_data_from_untappd(ctx.author, url)
     if resp['meta']['code'] == 200:
         return resp['response']['beer']
     else:
@@ -1406,7 +1422,7 @@ async def get_checkin(config, ctx, channels, checkin: int, auth_token: str = Non
         checkin, qstr
     )
 
-    resp = await get_data_from_untappd(ctx, url)
+    resp = await get_data_from_untappd(ctx.author, url)
     if resp['meta']['code'] != 200:
         # print("Lookup failed for url: "+url)
         return "Lookup failed with {!s} - {!s}".format(
@@ -1429,7 +1445,7 @@ async def get_checkins(config, ctx, channels, profile: str = None,
         return "No profile was provided or calculated"
     count = count or await list_size(config, ctx.guild)
 
-    keys = await get_auth(ctx, config)
+    keys = await get_auth(ctx.author.id, config)
     if count:
         keys["limit"] = count
     if start:
@@ -1440,7 +1456,7 @@ async def get_checkins(config, ctx, channels, profile: str = None,
         profile, qstr
     )
     # print("Looking up: {!s}".format(url))
-    resp = await get_data_from_untappd(ctx, url)
+    resp = await get_data_from_untappd(ctx.author, url)
     if resp["meta"]["code"] != 200:
         # print("Lookup failed for url: "+url)
         return "Lookup failed with {!s} - {!s}".format(
@@ -1471,14 +1487,14 @@ async def search_beer(config, ctx, query, limit=None):
     """Given a query string and some other
     information returns an embed of results"""
 
-    keys = await get_auth(ctx, config)
+    keys = await get_auth(ctx.author.id, config)
     keys["q"] = query
     keys["limit"] = limit
     qstr = urllib.parse.urlencode(keys)
 
     url = "https://api.untappd.com/v4/search/beer?%s" % qstr
     #    print(url)
-    resp = await get_data_from_untappd(ctx, url)
+    resp = await get_data_from_untappd(ctx.author, url)
     if resp["meta"]["code"] == 200:
         return resp['response']['beers']
     else:
@@ -1558,7 +1574,7 @@ async def profile_lookup(config, ctx, profile, limit=5):
 
     # TODO: Honor is_private flag on private profiles.
 
-    resp = await get_data_from_untappd(ctx, url)
+    resp = await get_data_from_untappd(ctx.author, url)
     if resp["meta"]["code"] == 400:
         return "The profile '{!s}' does not exist".format(profile)
     elif resp['meta']['code'] == 200:
@@ -1972,7 +1988,7 @@ def brewery_location(brewery):
     return format(', '.join(brewery_loca))
 
 
-async def get_data_from_untappd(ctx, url):
+async def get_data_from_untappd(author, url):
     """Perform a GET against the provided URL, returns a response
     NOTE: Provided URL is already formatted"""
 
@@ -1982,7 +1998,7 @@ async def get_data_from_untappd(ctx, url):
                 headers = resp.headers
                 if "X-Ratelimit-Remaining" in headers:
                     if int(headers["X-Ratelimit-Remaining"]) < 10:
-                        await ctx.author.send(
+                        await author.send(
                             ("Warning: **{!s}** API calls left for you this hour "
                              "and some commands use multiple calls. Sorry."
                              ).format(headers["X-Ratelimit-Remaining"])
