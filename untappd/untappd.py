@@ -749,7 +749,7 @@ class Untappd(BaseCog):
         if emoji == toast_emoji:
             # Find the checkin ID to use
             if len(react.message.embeds) > 0:
-                footer = react.message.embeds[0].footer
+                footer = react.message.embeds[0].footer.text
                 print("Got footer: {!s}".format(footer))
                 checkin_id = re.search('Checkin ([0-9]+) /', footer)
                 if checkin_id:
