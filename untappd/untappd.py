@@ -754,7 +754,7 @@ class Untappd(BaseCog):
                 match = re.search('Checkin ([0-9]+) /', footer)
                 if match:
                     success = await do_toast(self.config, person, checkin=match.group(1))
-                    if success && self.is_chatty:
+                    if success and self.is_chatty:
                         try:
                             await person.send("Toasted {!s}".format(match.group(1)))
                         except (discord.Forbidden, discord.HTTPException):
