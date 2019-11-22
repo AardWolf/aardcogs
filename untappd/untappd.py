@@ -9,6 +9,7 @@ from redbot.core import Config
 import urllib.parse
 import asyncio
 import random
+import re
 
 # noinspection PyUnresolvedReferences
 
@@ -112,6 +113,13 @@ class Untappd(BaseCog):
         await self.config.app_emoji.set(emoji)
         await ctx.send("App deep links will now use ("
                        + str(emoji) + ")")
+
+    @untappd.command()
+    @checks.mod_or_permissions(manage_messages=True)
+    async def toast_emoji(self, ctx, emoji: str):
+        """The emoji to use for super users"""
+        await self.config.toast_emoji.set(emoji)
+        await ctx.send("App deep links will now use ({!s})".format(emoji))
 
     @untappd.command()
     @commands.guild_only()
@@ -724,6 +732,39 @@ class Untappd(BaseCog):
         else:
             await ctx.send("I am expecting two words, the id and "
                            "the secret only")
+
+    @commands.Cog.listener()
+    async def on_reaction_add(self, react: discord.Reaction, person: discord.User):
+        """
+        When someone reacts to a thing, process it.
+
+        :param react: The reaction object
+        :param person: The user object for the person reacting
+        """
+        emoji = react.emoji
+        # Process the emoji
+        eid = emoji.id if react.custom_emoji else str(emoji)
+        toast_emoji = await self.config.toast_emoji()
+        if emoji == toast_emoji:
+            credentials = await check_credentials(self.config)
+            if not credentials:
+                return
+
+            try:
+                auth_token = await self.config.get_raw(person.id, "token")
+            except KeyError:
+                try:
+                    await person.dm_channel.send("You have not authorized me to toast as you")
+                except (discord.Forbidden, discord.HTTPException):
+                    return
+
+            #Find the checkin ID to use
+            if len(react.message.embeds) > 0:
+                footer = react.message.embed[0].footer
+                checkin_id = re.search('Checkin ([0-9]+) /', footer)
+                if checkin_id:
+                    do_toast(self.config,ctx,checkin_id)
+
 
     @commands.command()
     async def toast(self, ctx, *keywords):
