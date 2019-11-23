@@ -8,7 +8,6 @@ from redbot.core import checks
 from redbot.core import Config
 import urllib.parse
 import asyncio
-import random
 import re
 
 # noinspection PyUnresolvedReferences
@@ -22,9 +21,6 @@ import re
 # prefix = ctx.prefix
 
 BaseCog = getattr(commands, "Cog", object)
-detoasts = ["Toast rescinded!", "Toast removed. That seems kind of harsh",
-            "You're the one that made me de-toast. Seems like a jerk move",
-            "I think you meant toast but got de-toast", "Oh, check-in not fancy enough? Toast removed"]
 
 
 class Untappd(BaseCog):
@@ -590,6 +586,54 @@ class Untappd(BaseCog):
         else:
             results = await search_beer_to_embed(self.config, ctx, self.channels, keywords,
                                                  limit=list_limit)
+            if isinstance(results, dict):
+                embed = results["embed"]
+                if "beer_list" in results:
+                    beer_list = results["beer_list"]
+            else:
+                embed = results
+            # await ctx.send(result_text, embed=embed)
+
+        if isinstance(embed, str):
+            message = await ctx.send(embed)
+        elif embed:
+            message = await ctx.send(response, embed=embed)
+        else:
+            message = await ctx.send(response)
+
+        if len(beer_list) > 1:
+            await embed_menu(self.bot, self.config, ctx, self.channels, beer_list,
+                             message, 60)
+            # Raised to 60 second wait
+
+    @commands.command()
+    async def homebrew(self, ctx, *keywords):
+        """Search Untappd.com for a beer. Provide a number and it'll
+        look up that beer"""
+        beer_list = []
+        response = ""
+        list_limit = await list_size(self.config, ctx.guild)
+
+        credentials = await check_credentials(self.config)
+        if not credentials:
+            await ctx.send("The owner has not set the API information "
+                           "and should use the `untappd_apikey` command")
+            return
+
+        if keywords:
+            keywords = "+".join(keywords)
+        else:
+            await ctx.send_help()
+            return
+
+        # TODO migrate this to with ctx.channel.typing():
+        await ctx.channel.trigger_typing()
+        if keywords.isdigit():
+            embed = await lookup_beer(self.config, ctx, self.channels, keywords)
+            # await ctx.send( embed=embed)
+        else:
+            results = await search_beer_to_embed(self.config, ctx, self.channels, keywords,
+                                                 limit=list_limit, homebrew=True)
             if isinstance(results, dict):
                 embed = results["embed"]
                 if "beer_list" in results:
@@ -1483,7 +1527,7 @@ async def get_checkins(config, ctx, channels, profile: str = None,
     return result
 
 
-async def search_beer(config, ctx, query, limit=None):
+async def search_beer(config, ctx, query, limit=None, homebrew: bool = False):
     """Given a query string and some other
     information returns an embed of results"""
 
@@ -1496,16 +1540,19 @@ async def search_beer(config, ctx, query, limit=None):
     #    print(url)
     resp = await get_data_from_untappd(ctx.author, url)
     if resp["meta"]["code"] == 200:
-        return resp['response']['beers']
+        if homebrew:
+            return resp['response']['homebrew']
+        else:
+            return resp['response']['beers']
     else:
         return ("Search for `{!s}` resulted in {!s}: {!s}".
                 format(query, resp["meta"]["code"],
                        resp["meta"]["error_detail"]))
 
 
-async def search_beer_to_embed(config, ctx, channels, query, limit=None):
+async def search_beer_to_embed(config, ctx, channels, query, limit=None, homebrew: bool = False):
     """Searches for a beer and returns an embed"""
-    beers = await search_beer(config, ctx, query, limit)
+    beers = await search_beer(config, ctx, query, limit, homebrew)
     if isinstance(beers, str):
         # I'm not sure what happens when a naked embed gets returned.
         # return embedme(beers)
