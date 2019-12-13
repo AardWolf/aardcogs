@@ -1086,39 +1086,49 @@ class Untappd(BaseCog):
             except KeyError:
                 profile = ctx.author.display_name
         else:
-            profile = '+'.join(keywords)
+            if ctx.message.mentions:
+                # If user has set a nickname, use that - but only if it's not a PM
+                if ctx.guild:
+                    user = ctx.message.mentions[0]
+                    try:
+                        profile = await self.config.get_raw(guild, user.id, "nick")
+                    except KeyError:
+                        profile = user.display_name
+            else:
+                profile = '+'.join(keywords)
         payload = {
             "action": "status",
             "username": profile
         }
-        async with aiohttp.ClientSession() as sess:
-            async with sess.post(url, data=payload) as resp:
-                if resp.status == 200:
-                    try:
-                        j = await resp.json()
-                    except ValueError:
-                        await ctx.send("Error somewhere in Google")
-                        # print(resp)
-                        # text = await resp.read()
-                        # print(text)
-                        return
-                else:
-                    return "Query failed with code " + str(resp.status)
-
-                if j['result'] == "success":
-                    response_str = ""
-                    if "message" in j:
-                        response_str += j["message"] + " "
-                    if "hasStats" in j:
-                        response_str += "{} has {} points across {} checkins and {} found beers.".format(
-                            profile, j["points"], j["checkins"], j["found"]
-                        )
-                    await ctx.send(response_str)
-                else:
-                    if "message" in j:
-                        await ctx.send("Not Today! {}".format(j['message']))
+        async with ctx.message.channel.typing():
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, data=payload) as resp:
+                    if resp.status == 200:
+                        try:
+                            j = await resp.json()
+                        except ValueError:
+                            await ctx.send("Error somewhere in Google")
+                            # print(resp)
+                            # text = await resp.read()
+                            # print(text)
+                            return
                     else:
-                        await ctx.send("Something went wrong checking status")
+                        return "Query failed with code " + str(resp.status)
+
+                    if j['result'] == "success":
+                        response_str = ""
+                        if "message" in j:
+                            response_str += j["message"] + " "
+                        if "hasStats" in j:
+                            response_str += "{} has {} points across {} checkins and {} found beers.".format(
+                                profile, j["points"], j["checkins"], j["found"]
+                            )
+                        await ctx.send(response_str)
+                    else:
+                        if "message" in j:
+                            await ctx.send("Not Today! {}".format(j['message']))
+                        else:
+                            await ctx.send("Something went wrong checking status")
 
     @commands.command()
     @commands.guild_only()
