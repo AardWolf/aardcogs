@@ -1,4 +1,4 @@
-from typing import Any, Union
+# from typing import Any, Union
 
 import aiohttp
 from datetime import datetime, timezone
@@ -1061,6 +1061,67 @@ class Untappd(BaseCog):
                         await ctx.send("Something went wrong finding the beer")
 
     @commands.command()
+    @commands.guild_only()
+    async def ddpstats(self, ctx, *keywords):
+        """
+        Get the Drinking Project stats for yourself or another
+
+        :param ctx: Discord context
+        :param keywords: allow to specify other users
+        """
+        url = ""
+        if ctx.guild:
+            guild = str(ctx.guild.id)
+            try:
+                url = await self.config.get_raw(guild,"project_url")
+            except KeyError:
+                await ctx.send("Project is currently not open")
+                return
+        else:
+            await ctx.send("This command is not available in a PM")
+            return
+        if not keywords:
+            try:
+                profile = await self.config.get_raw(guild, ctx.author.id, "nick")
+            except KeyError:
+                profile = ctx.author.display_name
+        else:
+            profile = '+'.join(keywords)
+        payload = {
+            "action": "status",
+            "username": profile
+        }
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(url, data=payload) as resp:
+                if resp.status == 200:
+                    try:
+                        j = await resp.json()
+                    except ValueError:
+                        await ctx.send("Error somewhere in Google")
+                        # print(resp)
+                        # text = await resp.read()
+                        # print(text)
+                        return
+                else:
+                    return "Query failed with code " + str(resp.status)
+
+                if j['result'] == "success":
+                    response_str = ""
+                    if "message" in j:
+                        response_str += j["message"] + " "
+                    if "hasStats" in j:
+                        response_str += "{} has {} points across {} checkins and {} found beers.".format(
+                            profile, j["points"], j["checkins"], j["found"]
+                        )
+                    await ctx.send(response_str)
+                else:
+                    if "message" in j:
+                        await ctx.send("Not Today! {}".format(j['message']))
+                    else:
+                        await ctx.send("Something went wrong checking status")
+
+    @commands.command()
+    @commands.guild_only()
     async def ddp(self, ctx, checkin_id: int = 0):
         """Add a checkin to the spreadsheet. Defaults to last one"""
 
@@ -1094,9 +1155,7 @@ class Untappd(BaseCog):
         # checkin id	style	beer id	beer name	avg rating
         # brewery id	brewery	username	rating	comment
         if not checkin_id or checkin_id <= 0:
-            checkin_url = (
-                "https://api.untappd.com/v4/user/checkins/{!s}".format(
-                    profile))
+            checkin_url = ("https://api.untappd.com/v4/user/checkins/{!s}".format(profile))
             keys = dict()
             keys["client_id"] = await self.config.client_id()
             if auth_token:
@@ -1794,8 +1853,8 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
                 await ctx.send(embed=new_embed)
         return None
 
-    await embed_menu(client, config, ctx, channels, beer_list, message, timeout=timeout,
-                     reacted=True, type_=type_, paging=paging)
+    # await embed_menu(client, config, ctx, channels, beer_list, message, timeout=timeout, reacted=True,
+    # type_=type_, paging=paging)
 
 
 def checkins_to_string(count: int, checkins: list):
