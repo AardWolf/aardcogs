@@ -1,5 +1,6 @@
 red_setup_logs
 traderep/test.db
+.idea/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

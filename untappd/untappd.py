@@ -1201,10 +1201,7 @@ class Untappd(BaseCog):
             else:
                 keys["client_secret"] = await self.config.client_secret()
             qstr = urllib.parse.urlencode(keys)
-            checkin_url = ("https://api.untappd.com/v4/checkin/view/"
-                           "{!s}?{!s}").format(
-                checkin_id, qstr
-            )
+            checkin_url = "https://api.untappd.com/v4/checkin/view/{!s}?{!s}".format(checkin_id, qstr)
 
             j = await get_data_from_untappd(ctx.author, checkin_url)
             if j["meta"]["code"] != 200:
@@ -1230,6 +1227,7 @@ class Untappd(BaseCog):
         beer = await get_beer_by_id(self.config, ctx, beer_id)
         avg_rating = beer["rating_score"]
         total_checkins = beer["stats"]["total_user_count"]
+        abv = beer["beer_abv"]
 
         # added for March 2019 -- collabs!
         collabs = 0
@@ -1250,6 +1248,7 @@ class Untappd(BaseCog):
             "total_checkins": total_checkins,
             "checkin_date": checkin_date,
             "collabs": collabs,
+            "abv": abv,
             "comment": comment
         }
         async with aiohttp.ClientSession() as sess:
@@ -1277,9 +1276,9 @@ class Untappd(BaseCog):
                         if "styleString" in j:
                             response_str += "\n{}".format(j["styleString"])
                             print(j["styleString"])
-                    embed = await get_checkin(self.config, ctx, self.channels,
-                                              checkin=checkin_id,
-                                              auth_token=auth_token)
+                    # embed = await get_checkin(self.config, ctx, self.channels,
+                    #                          checkin=checkin_id, auth_token=auth_token)
+                    embed = await checkin_to_embed(self.config, ctx, self.channels, checkin)
                     if embed:
                         await ctx.send(response_str,
                                        embed=embed)
@@ -1531,9 +1530,7 @@ async def get_checkin(config, ctx, channels, checkin: int, auth_token: str = Non
     else:
         keys["client_secret"] = await config.client_secret()
     qstr = urllib.parse.urlencode(keys)
-    url = "https://api.untappd.com/v4/checkin/view/{!s}?{!s}".format(
-        checkin, qstr
-    )
+    url = "https://api.untappd.com/v4/checkin/view/{!s}?{!s}".format(checkin, qstr)
 
     resp = await get_data_from_untappd(ctx.author, url)
     if resp['meta']['code'] != 200:
@@ -1895,19 +1892,13 @@ async def checkin_to_embed(config, ctx, channels, checkin):
     # Get the base beer information
     beer = await get_beer_by_id(config, ctx, checkin["beer"]["bid"])
     # titleStr = "Checkin {!s}".format(checkin["checkin_id"])
-    url = "https://untappd.com/user/{!s}/checkin/{!s}".format(
-        checkin["user"]["user_name"],
-        checkin["checkin_id"]
-    )
+    url = "https://untappd.com/user/{!s}/checkin/{!s}".format(checkin["user"]["user_name"], checkin["checkin_id"])
     # deep_checkin_link = "[{!s}](untappd://checkin/{!s})".format(
     #    await config.app_emoji(),
     #    checkin["checkin_id"]
     # )
-    title = "{!s} was drinking {!s} by {!s}".format(
-        checkin["user"]["first_name"],
-        checkin["beer"]["beer_name"],
-        checkin["brewery"]["brewery_name"]
-    )
+    title = "{!s} was drinking {!s} by {!s}".format(checkin["user"]["first_name"], checkin["beer"]["beer_name"],
+                                                    checkin["brewery"]["brewery_name"])
     # deep_beer_link = "[{!s}](untappd://beer/{!s})".format(
     #    await config.app_emoji(),
     #    checkin["beer"]["bid"]
@@ -1916,56 +1907,39 @@ async def checkin_to_embed(config, ctx, channels, checkin):
     #    await config.app_emoji(),
     #    checkin["brewery"]["brewery_id"]
     # )
-    checkin_time = datetime.strptime(checkin["created_at"],
-                                     "%a, %d %b %Y %H:%M:%S %z")
+    checkin_time = datetime.strptime(checkin["created_at"], "%a, %d %b %Y %H:%M:%S %z")
 
-    embed = discord.Embed(title=title,
-                          description=beer["beer_description"][:2048],
-                          url=url, timestamp=checkin_time)
+    embed = discord.Embed(title=title, description=beer["beer_description"][:2048], url=url, timestamp=checkin_time)
     if checkin["media"]["count"] >= 1:
         embed.set_thumbnail(
             url=checkin["media"]["items"][0]["photo"]["photo_img_md"]
         )
     # Add fields of interest
-    beer_link = "[{!s}](https://untappd.com/beer/{!s})".format(
-        checkin["beer"]["beer_name"],
-        checkin["beer"]["bid"]
-    )
+    beer_link = "[{!s}](https://untappd.com/beer/{!s})".format(checkin["beer"]["beer_name"], checkin["beer"]["bid"])
     embed.add_field(name="Beer", value=beer_link)
-    brewery_link = "[{!s}](https://untappd.com/brewery/{!s})".format(
-        checkin["brewery"]["brewery_name"],
-        checkin["brewery"]["brewery_id"]
-    )
-    brewery_link += " in {!s}".format(
-        brewery_location(checkin["brewery"]))
+    brewery_link = "[{!s}](https://untappd.com/brewery/{!s})".format(checkin["brewery"]["brewery_name"],
+                                                                     checkin["brewery"]["brewery_id"])
+    brewery_link += " in {!s}".format(brewery_location(checkin["brewery"]))
     embed.add_field(name="Brewery", value=brewery_link)
     if isinstance(checkin["venue"], dict):
-        venue = "[{!s}](https://untappd.com/venue/{!s})".format(
-            checkin["venue"]["venue_name"],
-            checkin["venue"]["venue_id"]
-        )
+        venue = "[{!s}](https://untappd.com/venue/{!s})".format(checkin["venue"]["venue_name"],
+                                                                checkin["venue"]["venue_id"])
         embed.add_field(name="Venue", value=venue)
     title = "Rating"
     if checkin["rating_score"]:
         title += " - {!s}".format(checkin["rating_score"])
-    rating = "**{!s}** Average ({!s})".format(
-        round(beer['rating_score'], 2),
-        human_number(beer['rating_count'])
-    )
+    rating = "**{!s}** Average ({!s})".format(round(beer['rating_score'], 2), human_number(beer['rating_count']))
     embed.add_field(name=title, value=rating)
     embed.add_field(name="Style", value=beer["beer_style"])
     embed.add_field(name="ABV", value=(beer["beer_abv"] or "N/A"))
     embed.add_field(name="IBU", value=(beer["beer_ibu"] or "N/A"))
-    checkin_text = "{!s} checkins from {!s} users".format(
-        human_number(beer["stats"]["total_count"]),
-        human_number(beer["stats"]["total_user_count"])
-    )
+    checkin_text = "{!s} checkins from {!s} users".format(human_number(beer["stats"]["total_count"]),
+                                                          human_number(beer["stats"]["total_user_count"]))
     embed.add_field(name="Checkins", value=checkin_text)
     if "collaborations_with" in beer:
         collab_text = ""
         collabs = beer['collaborations_with']['items']
-        for num, collab in zip(range(10),
-                               collabs):
+        for num, collab in zip(range(10), collabs):
             collab_text += "[" + collab['brewery']['brewery_name']
             collab_text += "](https://untappd.com/brewery/"
             collab_text += str(collab['brewery']['brewery_id']) + ")\n"
@@ -1973,15 +1947,10 @@ async def checkin_to_embed(config, ctx, channels, checkin):
             collab_text += "... and more"
         embed.add_field(name="Collaboration with", value=collab_text[:2048])
     if checkin["checkin_comment"]:
-        embed.add_field(name="Comment",
-                        value=checkin["checkin_comment"][:1024])
+        embed.add_field(name="Comment", value=checkin["checkin_comment"][:1024])
     if (checkin["comments"]["count"] + checkin["toasts"]["count"]) > 0:
-        new_value = "{!s}({!s}){!s}({!s})".format(
-            EMOJI["comments"],
-            checkin["comments"]["count"],
-            EMOJI["beers"],
-            checkin["toasts"]["count"]
-        )
+        new_value = "{!s}({!s}){!s}({!s})".format(EMOJI["comments"], checkin["comments"]["count"], EMOJI["beers"],
+                                                  checkin["toasts"]["count"])
         embed.add_field(name="Flags", value=new_value)
     if checkin["badges"]["count"] > 0:
         badge_text = ""
@@ -1991,9 +1960,7 @@ async def checkin_to_embed(config, ctx, channels, checkin):
     #    embed.add_field(name="DeepCheckin", value=deep_checkin_link)
     #    embed.add_field(name="DeepBeer", value=deep_beer_link)
     #    embed.add_field(name="DeepBrewery", value=deep_brewery_link)
-    embed.set_footer(text="Checkin {!s} / Beer {!s}"
-                     .format(checkin["checkin_id"],
-                             checkin["beer"]["bid"]))
+    embed.set_footer(text="Checkin {!s} / Beer {!s}".format(checkin["checkin_id"], checkin["beer"]["bid"]))
     channel = ctx.channel.id
     if channel not in channels:
         channels[channel] = {}
