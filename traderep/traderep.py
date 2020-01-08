@@ -193,7 +193,7 @@ class Traderep(commands.Cog):
             return
         # Find the open trade number
         cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
-                    " where tp.tradenum = ? and person = ? and (t.status = 1 or t.status is null)"
+                    " where tp.tradenum = ? and person = ? and (tp.rep = null or t.status is null)"
                     " order by t.start_time asc",
                     (trade_num, ctx.message.author.id))
         row = cur.fetchone()
@@ -234,7 +234,7 @@ class Traderep(commands.Cog):
                                 trade_who, trade_num
                             )))
             else:
-                await ctx.send("I didn't find a trade matching that description which involved you")
+                await ctx.send("I didn't find an open trade matching that description which involved you")
         else:
             await ctx.send("I didn't find a trade matching that description which involved you")
 
@@ -322,7 +322,7 @@ class Traderep(commands.Cog):
                                 trade_who, trade_num
                             )))
             else:
-                await ctx.send("I didn't find a trade matching that description which involved you")
+                await ctx.send("I didn't find an open trade matching that description which involved you")
         else:
             await ctx.send("I didn't find a trade matching that description which involved you")
 
@@ -378,13 +378,13 @@ class Traderep(commands.Cog):
         status_str = ""
 
         if rep:
-            report_str += "Rep: **{}** across {} repped trades, {} total trades\n".format(rep,
-                                                                                          repped_trades, total_trades)
+            report_str += "*Rep: **{}** across {} repped trades, {} total trades\n".format(rep,
+                                                                                           repped_trades, total_trades)
         else:
-            status_str += "Has no rep. "
+            status_str += "*Has no rep. "
 
         if open_trades:
-            report_str += "Open trades ({}) with: ".format(open_trades)
+            report_str += "*Open trades ({}) with: ".format(open_trades)
             cur.execute("SELECT t.tradenum, tp.partner from trade t join tradeperson tp on tp.tradenum = t.tradenum"
                         " where t.status is null and tp.person = {} order by t.start_time desc".format(id_to_use))
             rows = cur.fetchmany(size=10)
@@ -398,10 +398,10 @@ class Traderep(commands.Cog):
             name_str = name_str.rstrip(", ")
             report_str += name_str + "\n"
         else:
-            status_str += "Has no open trades. "
+            status_str += "*Has no open trades.\n"
 
         if repped_trades:
-            report_str += "Most recent repped trades: "
+            report_str += "*Most recent repped trades: "
             cur.execute("SELECT tp.rep, tp.person from tradeperson tp WHERE tp.partner = {} and tp.rep is not null "
                         "order by tp.rep_time desc"
                         .format(id_to_use))
@@ -418,10 +418,10 @@ class Traderep(commands.Cog):
             name_str = name_str.rstrip(", ")
             report_str += name_str + "\n"
         else:
-            status_str += "Has no repped trades. "
+            status_str += "*Has no repped trades. "
 
         if closed_unrepped_trades:
-            report_str += "Partners waiting on rep: "
+            report_str += "*Partners waiting on rep: "
             cur.execute("SELECT tp.partner, tp.tradenum from trade t join tradeperson tp on tp.tradenum = t.tradenum"
                         " where t.status = 1 and tp.rep is null and tp.person = {}".format(id_to_use))
             rows = cur.fetchmany(size=10)
@@ -435,10 +435,10 @@ class Traderep(commands.Cog):
             name_str = name_str.rstrip(", ")
             report_str += name_str + "\n"
         else:
-            status_str += "Has no partners waiting on reps. "
+            status_str += "*Has no partners waiting on reps."
 
         if closed_waiting_trade:
-            report_str += "{} is waiting on rep from: ".format(name_to_use)
+            report_str += "*Waiting on rep from: "
             cur.execute("SELECT tp.person, tp.tradenum from trade t join tradeperson tp on tp.tradenum = t.tradenum"
                         " where t.status = 1 and tp.rep is null and tp.partner = {}".format(id_to_use))
             rows = cur.fetchmany(size=10)
@@ -452,10 +452,30 @@ class Traderep(commands.Cog):
             name_str = name_str.rstrip(", ")
             report_str += name_str + "\n"
         else:
-            status_str += "Isn't waiting on rep. "
+            status_str += "*Isn't waiting on rep. "
 
         report_str += status_str
         await ctx.send(report_str)
+
+    @traderep.command(name="open", aliases=["listopen", "whatsopen"], pass_context=True, no_pm=True)
+    async def open(self, ctx):
+        """Generates a report listing all open trades."""
+        await ctx.channel.trigger_typing()
+        cur = self.connection.cursor()
+        cur.execute("SELECT count(t.tradenum) from trade t join tradeperson tp on tp.tradenum = t.tradenum"
+                    " where tp.rep is null")
+        row = cur.fetchone()
+        open_trades = row[0]
+        print(open_trades)
+        trade_str = "({}) Open trades\n".format(open_trades)
+        if open_trades:
+            cur.execute("SELECT tp.tradenum, t.start_time, tp.person, tp.partner FROM tradeperson tp LEFT JOIN trade t on tp.tradenum = t.tradenum"
+                        " where tp.rep is null order by t.start_time asc")
+            rows = cur.fetchall()
+            print(rows)
+            for row in rows:
+                trade_str += "Trade: ({}) Between {} and {} started {}, pending rep from {}\n".format(row[0], (await self.get_user_by_id(ctx, row[2])).display_name, (await self.get_user_by_id(ctx, row[3])).display_name, row[1], (await self.get_user_by_id(ctx, row[2])).mention)
+            await ctx.send(trade_str)
 
     async def get_user_by_id(self, ctx, id_to_find):
         """Takes an ID and tries multiple ways to get the user"""
@@ -504,7 +524,8 @@ def new_database(con):
                    "end_time text, status integer)")
     cursor.execute("CREATE TABLE tradeperson (tradenum integer, person text, partner text, rep integer, "
                    "rep_time text, primary key(tradenum, person, partner))")
-    cursor.execute("CREATE TABLE tradelog (logtime text, who integer, tradenum integer, what text)")
+    cursor.execute(
+        "CREATE TABLE tradelog (logtime text, who integer, tradenum integer, what text)")
 
 
 def db_upgrade(con, old_version):
@@ -517,4 +538,5 @@ def db_upgrade(con, old_version):
         old_version = 1.0
     # Note for future: create a new table, copy /change data to it, drop old table, create table, copy data
     if old_version < db_version:
-        print("Database is at {} but don't know how to upgrade to {}".format(old_version, db_version))
+        print("Database is at {} but don't know how to upgrade to {}".format(
+            old_version, db_version))
