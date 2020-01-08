@@ -353,7 +353,7 @@ async def repmod(self, ctx, arg, mod):
         return
     # Find the open trade number
     cur.execute("SELECT tp.tradenum, partner from tradeperson tp join trade t on t.tradenum = tp.tradenum"
-                " where tp.tradenum = ? and person = ? and (t.status = 1 or t.status is null)"
+                " where tp.tradenum = ? and person = ? and (t.status is null or tp.rep is null)"
                 " order by t.start_time asc",
                 (trade_num, ctx.message.author.id))
     row = cur.fetchone()
@@ -385,25 +385,20 @@ async def repmod(self, ctx, arg, mod):
                     await ctx.send("You closed your end of trade {} and {} {} for it. It's their turn to rep you"
                                    .format(trade_num, mod_word, partner.mention))
                 else:
-                    await ctx.send("You {} {} for trade {}.".format(
+                    await ctx.send("You {} {} for trade {} and that should mean all reps complete... 🎆Hurray!🎆".format(
                         mod_word, partner.mention, trade_num
                     ))
             else:
-                if did_close:
-                    await ctx.send("You closed your end of trade {} and {} {} for it. It's their turn to rep you..."
-                                   .format(trade_num, mod_word, partner.mention))
-                else:
-                    await ctx.send("You {} {} for trade {} and that should mean all reps complete...".format(
-                        mod_word, partner.mention, trade_num
-                    ))
+                await ctx.send("get_user_by_id failed, yell at someone! {} {} {}"
+                               .format(ctx, trade_who, self))
             try:
                 cur.execute("INSERT INTO tradelog (logtime, who, tradenum, what) values (DateTime('now'), ?, ?, ?)",
-                            (ctx.message.author.id, trade_num, "Author {} {} for trade {}".format(mod_word, trade_who, trade_num)))
+                            (ctx.message.author.id, trade_num, "Author {} {} for trade {}".format(mod_word, partner.id, trade_num)))
             except sqlite3.OperationalError as e:
                 await ctx.send("There's a problem right now: {}".format(e))
                 return
             if self.bot.user.id == partner.id:
-                await keep_bot_in_check(ctx, trade_num, cur, self.bot.user.id)
+                await keep_bot_in_check(ctx, trade_num, cur, partner.id)
         else:
             await ctx.send("I didn't find a trade matching that description which involved you")
     else:
@@ -411,12 +406,13 @@ async def repmod(self, ctx, arg, mod):
 
 
 async def keep_bot_in_check(ctx, trade_num, cur, bot_id):
-    await ctx.send("Closed bot end of trade")
+    await ctx.send("Closed 🤖 end of trade")
     try:
         cur.execute("update tradeperson set rep = ?, rep_time = DateTime('now') where tradenum = ? and "
                     "person = ? and partner = ?", (0, trade_num, bot_id, ctx.message.author.id))
         cur.execute("INSERT INTO tradelog (logtime, who, tradenum, what) values (DateTime('now'), ?, ?, ?)",
-                    (ctx.message.author.id, trade_num, "Author added 0 rep to bot {} for trade {}".format(bot_id, trade_num)))
+                    (ctx.message.author.id, trade_num, "Author added 0 rep to self {} for bot trade {}".format(
+                        bot_id, trade_num)))
     except sqlite3.OperationalError as e:
         await ctx.send("There's a problem right now: {}".format(e))
         return
