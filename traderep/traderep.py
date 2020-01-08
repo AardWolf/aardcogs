@@ -13,9 +13,7 @@ db_version = 1.0
 """
 !traderep start @person -- Signifies an agreement has been made between the person mentioned and the person running
         the command. Creates an open trade which will have a number to reference.
-!traderep done <#> -- Signifies a trade is complete but does nothing for reputation.
-!traderep rep <#> @person -- Adds rep to the mentioned person from the person running the command. Requires a trade be
-        done (or closes it)
+!traderep rep <#> @person -- Adds rep to the mentioned person from the person running the command.
 !traderep derep <#> @person <reason> -- Doesn't rep the person, maybe gives a negative rep, but requires a reason.
 !traderep report [@person] -- With no argument reports for yourself. Mention a person (requires a mention so they know
         you're looking) generates a report (in PM?) for that person of their rep, any derep reasons 
@@ -80,15 +78,10 @@ class Traderep(commands.Cog):
         else:
             await ctx.send("Something very bad happened and I didn't get a trade number, try again?")
 
-    @traderep.command(name="done", aliases=["complete", "finish"], pass_context=True, no_pm=True, hidden=True)
-    async def trade_complete(self, ctx, trade_num: int):
-        """Marks a trade as done. Obsoleted"""
-        await ctx.send("This command is no longer used, just rep the person")
-        return
-
     @traderep.command(name="cancel", aliases=["stop"], pass_context=True, no_pm=True)
     async def trade_stop(self, ctx, arg):
         """Stops a trade but doesn't break it"""
+        await ctx.channel.trigger_typing()
         trade_who, trade_num, trade_person = None, None, None
         mentions = ctx.message.mentions
         if arg.isdigit():
@@ -114,7 +107,7 @@ class Traderep(commands.Cog):
         if row:
             trade_who, trade_num = row[0], row[1]
             if row[0]:
-                cur.execute("update trade set end_time = 'now', status=-1 where tradenum = {}".format(
+                cur.execute("update trade set end_time = 'now', status = -1 where tradenum = {}".format(
                     trade_num
                 ))
                 if cur.rowcount == 1:
@@ -149,7 +142,8 @@ class Traderep(commands.Cog):
 
     @traderep.command(name="rep", pass_context=True, no_pm=True)
     async def rep(self, ctx, arg):
-        """Reps a trading partner for a trade. Closes trade"""
+        """Reps a trading partner for a trade. Closes your end of a trade"""
+        await ctx.channel.trigger_typing()
         if not arg:
             await ctx.send("Maybe you only have one trade open but I don't want to risk it, be specific.")
             return
@@ -215,7 +209,7 @@ class Traderep(commands.Cog):
                     return
                 if partner:
                     if did_close:
-                        await ctx.send("You closed trade {} and repped {} for it. It's their turn to rep you"
+                        await ctx.send("You closed your end of trade {} and repped {} for it. It's their turn to rep you"
                                        .format(trade_num, partner.mention))
                     else:
                         await ctx.send("You repped {} for trade {}.".format(
@@ -223,7 +217,7 @@ class Traderep(commands.Cog):
                         ))
                 else:
                     if did_close:
-                        await ctx.send("You closed trade {} and repped {} for it. It's their turn to rep you..."
+                        await ctx.send("You closed your end of trade {} and repped {} for it. It's their turn to rep you..."
                                        .format(trade_num, trade_who))
                     else:
                         await ctx.send("You repped {} for trade {} and that should mean all reps complete...".format(
@@ -241,6 +235,7 @@ class Traderep(commands.Cog):
     @traderep.command(name="derep", pass_context=True, no_pm=True)
     async def derep(self, ctx, arg):
         """Dings a trading partner for messing up a trade"""
+        await ctx.channel.trigger_typing()
         if not arg:
             await ctx.send("Maybe you only have one trade open but I don't want to risk it, be specific.")
             return
@@ -329,6 +324,7 @@ class Traderep(commands.Cog):
     @traderep.command(name="report", aliases=["profile", "status"], pass_context=True, no_pm=True)
     async def report(self, ctx, *, args="0"):
         """Generates a report on a user. Accepts names, mentions, and IDs"""
+        await ctx.channel.trigger_typing()
         mentions = ctx.message.mentions
         if not args or args == "0":
             # User is reporting on themself
@@ -402,7 +398,7 @@ class Traderep(commands.Cog):
 
         if repped_trades:
             report_str += "Most recent repped trades: "
-            cur.execute("SELECT tp.rep, tp.person from tradeperson tp WHERE tp.partner = {} and tp.rep is not null "
+            cur.execute("SELECT tp.tradenum, tp.person, tp.rep from tradeperson tp WHERE tp.partner = {} and tp.rep is not null "
                         "order by tp.rep_time desc"
                         .format(id_to_use))
             rows = cur.fetchmany(size=10)
@@ -504,7 +500,8 @@ def new_database(con):
                    "end_time text, status integer)")
     cursor.execute("CREATE TABLE tradeperson (tradenum integer, person text, partner text, rep integer, "
                    "rep_time text, primary key(tradenum, person, partner))")
-    cursor.execute("CREATE TABLE tradelog (logtime text, who integer, tradenum integer, what text)")
+    cursor.execute(
+        "CREATE TABLE tradelog (logtime text, who integer, tradenum integer, what text)")
 
 
 def db_upgrade(con, old_version):
@@ -517,4 +514,5 @@ def db_upgrade(con, old_version):
         old_version = 1.0
     # Note for future: create a new table, copy /change data to it, drop old table, create table, copy data
     if old_version < db_version:
-        print("Database is at {} but don't know how to upgrade to {}".format(old_version, db_version))
+        print("Database is at {} but don't know how to upgrade to {}".format(
+            old_version, db_version))
