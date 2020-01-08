@@ -3,7 +3,7 @@ Cogs for Discord-Red
 
 ## Untappd 
 
-The first cog, it interacts with Untappd through its API. If you'd like to use it you'll need an Untappd API key (https://untappd.com/api/dashboard). By default it will use https://aardwolf.github.io/tokenrevealer.html as the callback URL. I encourage you to take a loot at that and decide if it's safe enough for your purposes. It's hard-coded for now but easy enough to change.
+The first cog, it interacts with Untappd through its API. If you'd like to use it you'll need an Untappd API key (https://untappd.com/api/dashboard). By default it will use https://aardwolf.github.io/tokenrevealer.html as the callback URL. I encourage you to take a look at that and decide if it's safe enough for your purposes. It's hard-coded for now but easy enough to change.
 
 The cog itself is used to interact with simple untappd calls - look up beers, display checkins, and toast checkins.
 
@@ -31,7 +31,6 @@ Built out of a request on the [Untappd Discord server](http://discord.me/untappd
 Commands:
   cancel Stops a trade but doesn't break it
   derep  Dings a trading partner for messing up a trade
-  done   Marks a trade as done
   rep    Reps a trading partner for a trade
   report Generates a report on a user. Accepts names, mentions, and IDs
   start  Starts a trade between the person executing the command and the pers...
@@ -40,4 +39,3 @@ Commands:
 A database will be created in `data/traderep` and it's a really good idea to back this up if you want to be able to restore it.
 
 All commands that make a change to the database are logged within it with the idea that you can work backwards in the case of shenanigans. 
-
