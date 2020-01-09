@@ -266,7 +266,7 @@ class Traderep(commands.Cog):
             name_str = name_str.rstrip(", ")
             report_str += name_str + "\n"
         else:
-            status_str += "*Has no partners waiting on reps."
+            status_str += "*Has no partners waiting on reps.\n"
 
         if closed_waiting_trade:
             report_str += "*Waiting on rep from: "
@@ -402,7 +402,7 @@ async def repmod(self, ctx, arg, mod):
                 return
             if partner:
                 if did_close:
-                    await ctx.send("You closed your end of trade {} and {} {} for it. It's their turn to rep you"
+                    await ctx.send("You closed your end of trade {} and {} {} for it.\nIt's their turn to rep you"
                                    .format(trade_num, mod_word, partner.mention))
                 else:
                     await ctx.send("You {} {} for trade {} and that should mean all reps complete... 🎆Hurray!🎆".format(
