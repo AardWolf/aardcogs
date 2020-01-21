@@ -1,5 +1,5 @@
 red_setup_logs
-traderep/test.db
+traderep/*.db
 .idea/
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -102,3 +102,7 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# vscode settings
+.vscode/settings.json
+.vscode/launch.json
