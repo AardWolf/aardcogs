@@ -1,5 +1,5 @@
 {
-    "author" : "Aardwolf98",
+    "author" : ["Aardwolf98"],
     "install_msg" : "Thank you for trying out my repository. It's pretty niche so I'm interested in why you would have stumbled upon it.",
     "name" : "AardCogs",
     "short" : "Just Untappd",
