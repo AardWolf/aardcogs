@@ -1069,11 +1069,11 @@ class Untappd(BaseCog):
         :param ctx: Discord context
         :param keywords: allow to specify other users
         """
-        url = ""
+        profile = ""
         if ctx.guild:
             guild = str(ctx.guild.id)
             try:
-                url = await self.config.get_raw(guild,"project_url")
+                url = await self.config.get_raw(guild, "project_url")
             except KeyError:
                 await ctx.send("Project is currently not open")
                 return
