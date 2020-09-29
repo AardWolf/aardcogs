@@ -42,7 +42,7 @@ class Untappd(BaseCog):
         }
         self.config.register_global(**default_config)
         self.channels = {}
-        self.is_chatty = False # Lets some debugging / annoying PMs happen
+        self.is_chatty = False  # Lets some debugging / annoying PMs happen
 
     @commands.group(invoke_without_command=False)
     async def groupdrink(self, ctx):
@@ -712,7 +712,7 @@ class Untappd(BaseCog):
         return
 
     @commands.command()
-    async def profile(self, ctx, profile: str = None):
+    async def utprofile(self, ctx, profile: str = None):
         """Search for a user's information by providing their profile name,
         discord mentions OK"""
 
@@ -789,7 +789,7 @@ class Untappd(BaseCog):
         """
         emoji = react.emoji
         # Process the emoji
-        eid = emoji.id if react.custom_emoji else str(emoji)
+        # eid = emoji.id if react.custom_emoji else str(emoji)
         toast_emoji = await self.config.toast_emoji()
         if emoji == toast_emoji:
             # Find the checkin ID to use
@@ -808,7 +808,6 @@ class Untappd(BaseCog):
     async def toast(self, ctx, *keywords):
         """Toasts a checkin by number, if you're friends"""
 
-        author = ctx.author
         checkin = 0
 
         for word in keywords:
@@ -984,16 +983,13 @@ class Untappd(BaseCog):
             beers = await search_beer(self.config, ctx, keywords, limit=1)
             if isinstance(beers, str):
                 await ctx.send(
-                    "Lookup of `{!s}` didn't result in a beer list: {!s}".
-                        format(keywords, beers)
+                    "Lookup of `{!s}` didn't result in a beer list: {!s}".format(keywords, beers)
                 )
                 return
             elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
-                await ctx.send(("Lookup of `{!s}` failed. So no, "
-                                "you haven't"
-                                ).format(keywords))
+                await ctx.send("Lookup of `{!s}` failed. So no, you haven't".format(keywords))
                 return
 
         if beerid:
@@ -1228,6 +1224,7 @@ class Untappd(BaseCog):
         avg_rating = beer["rating_score"]
         total_checkins = beer["stats"]["total_user_count"]
         abv = beer["beer_abv"]
+        beer_date = beer["created_at"]
 
         # added for March 2019 -- collabs!
         collabs = 0
@@ -1249,7 +1246,8 @@ class Untappd(BaseCog):
             "checkin_date": checkin_date,
             "collabs": collabs,
             "abv": abv,
-            "comment": comment
+            "comment": comment,
+            "beer_date": beer_date
         }
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, data=payload) as resp:
@@ -1342,6 +1340,65 @@ class Untappd(BaseCog):
                         await ctx.send(j["message"])
                     else:
                         await ctx.send("Something went wrong adding the checkin")
+
+
+    @commands.command()
+    @commands.guild_only()
+    async def unfound(self, ctx, beer_id: int):
+        """Removes a beer you found"""
+
+        author = ctx.author
+        url = ""
+        if ctx.guild:
+            guild = str(ctx.guild.id)
+            try:
+                url = await self.config.get_raw(guild, "project_url")
+            except KeyError:
+                pass
+            try:
+                profile = await self.config.get_raw(guild, author.id, "nick")
+            except KeyError:
+                profile = author.display_name
+        else:
+            profile = author.display_name
+
+        if not url:
+            await ctx.send("Looks like there are no projects right now")
+            return
+
+        payload = {
+            "action": "unfind",
+            "beerid": beer_id,
+            "username": profile
+        }
+        async with ctx.channel.typing():
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, data=payload) as resp:
+                    if resp.status == 200:
+                        try:
+                            j = await resp.json()
+                        except ValueError:
+                            await ctx.send("Error somewhere in Google")
+                            text = await resp.read()
+                            print(text)
+                            return
+                    else:
+                        return "Query failed with code " + str(resp.status)
+
+                    if j['result'] == "success":
+                        response_str = ""
+                        if "message" in j:
+                            response_str += j["message"] + " "
+                        if "hasStats" in j:
+                            response_str += "{} has {} points across {} checkins and {} found beers.".format(
+                                j["username"], j["points"], j["checkins"], j["found"]
+                            )
+                        await ctx.send(response_str)
+                    else:
+                        if "message" in j:
+                            await ctx.send(j["message"])
+                        else:
+                            await ctx.send("Something went un-finding the beer")
 
 
 async def do_toast(config, author, checkin: int):
@@ -1510,7 +1567,7 @@ def beer_to_embed(beer, rating=None):
         collab_str = ""
         collabs = beer['collaborations_with']['items']
         for num, collab in zip(range(10), collabs):
-            collab_str += "[" + collab['brewery']['brewery_name']
+            collab_str += num + " [" + collab['brewery']['brewery_name']
             collab_str += "](https://untappd.com/brewery/"
             collab_str += str(collab['brewery']['brewery_id']) + ")\n"
         if len(collabs) > 10:
@@ -1816,7 +1873,7 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
         await ctx.send("I didn't get a handle to an existing message.")
         return
 
-    for num, beer in zip(range(1, limit + 1), beer_list):
+    for num, beer in zip(range(1, limit + 1), beer_list): # pylint: disable=unused-variable
         emoji.append(EMOJI[num])
         await message.add_reaction(EMOJI[num])
 
@@ -1826,8 +1883,7 @@ async def embed_menu(client, config, ctx, channels, beer_list: list, message, ti
         return False
 
     try:
-        react, user = await client.wait_for(
-            'reaction_add', timeout=timeout, check=check)
+        react, user = await client.wait_for('reaction_add', timeout=timeout, check=check) # pylint: disable=unused-variable
     except asyncio.TimeoutError:
         # await ctx.send("Timed out, cleaning up")
         try:
@@ -1939,7 +1995,7 @@ async def checkin_to_embed(config, ctx, channels, checkin):
     if "collaborations_with" in beer:
         collab_text = ""
         collabs = beer['collaborations_with']['items']
-        for num, collab in zip(range(10), collabs):
+        for num, collab in zip(range(10), collabs): # pylint: disable=unused-variable
             collab_text += "[" + collab['brewery']['brewery_name']
             collab_text += "](https://untappd.com/brewery/"
             collab_text += str(collab['brewery']['brewery_id']) + ")\n"
