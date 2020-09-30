@@ -1,5 +1,5 @@
 {
-	"author" : "Aardwolf98",
+	"author" : ["Aardwolf98"],
 	"short" : "Perform simple Untappd lookups in chat",
 	"description" : "Allows simple commands for looking up beers and people within discord",
 	"disabled" : false,
