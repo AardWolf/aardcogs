@@ -1566,8 +1566,8 @@ def beer_to_embed(beer, rating=None):
     if "collaborations_with" in beer:
         collab_str = ""
         collabs = beer['collaborations_with']['items']
-        for num, collab in zip(range(10), collabs):
-            collab_str += num + " [" + collab['brewery']['brewery_name']
+        for num, collab in zip(range(10), collabs): # pylint: disable=unused-variable
+            collab_str += " [" + collab['brewery']['brewery_name']
             collab_str += "](https://untappd.com/brewery/"
             collab_str += str(collab['brewery']['brewery_id']) + ")\n"
         if len(collabs) > 10:
