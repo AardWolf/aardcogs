@@ -15,7 +15,7 @@ Commands:
   findbeer1   Gives beer details for the first beer that matches
   haveihad    Lookup a beer to see if you've had it
   lastbeer    Displays details for the last beer a person had
-  profile     Search for a user's information by providing their profile name,
+  utprofile   Search for a user's information by providing their profile name,
   toast       Toasts a checkin by number, if you're friends
   untappd     Explicit Untappd things
   unwishlist  Requires that you've authorized the bot.
