@@ -1426,7 +1426,7 @@ class Untappd(BaseCog):
             "action": "undrank",
             "checkin": checkin_id,
         }
-        print("Submitting undrank: "+checkin_id);
+        print("Submitting undrank: {}".format(checkin_id));
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, data=payload) as resp:
                 if resp.status == 200:
