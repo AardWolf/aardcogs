@@ -1126,6 +1126,60 @@ class Untappd(BaseCog):
                         else:
                             await ctx.send("Something went wrong checking status")
 
+
+    @commands.command()
+    @commands.guild_only()
+    async def whodrank(self, ctx, beerid: int):
+        """
+        See who else drank this beer
+
+        :param ctx: Discord context
+        :param keywords: allow to specify other users
+        """
+        if ctx.guild:
+            guild = str(ctx.guild.id)
+            try:
+                url = await self.config.get_raw(guild, "project_url")
+            except KeyError:
+                await ctx.send("Project is currently not open")
+                return
+        else:
+            await ctx.send("This command is not available in a PM")
+            return
+        if not beerid:
+            await ctx.send("Who drank what?")
+            return
+
+        payload = {
+            "action": "whodrank",
+            "beerid": beerid
+        }
+        async with ctx.message.channel.typing():
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(url, data=payload) as resp:
+                    if resp.status == 200:
+                        try:
+                            j = await resp.json()
+                        except ValueError:
+                            await ctx.send("Error somewhere in Google")
+                            # print(resp)
+                            # text = await resp.read()
+                            # print(text)
+                            return
+                    else:
+                        return "Query failed with code " + str(resp.status)
+
+                    if "message" in j:
+                        response_str = "Nobody has added that beer"
+                        if j["message"]:
+                            response_str = "These people added that beer: " + j["message"]
+                        await ctx.send(response_str)
+                    else:
+                        if "message" in j:
+                            await ctx.send("Not Today! {}".format(j['message']))
+                        else:
+                            await ctx.send("Something went wrong checking status")
+
     @commands.command()
     @commands.guild_only()
     async def ddp(self, ctx, checkin_id: int = 0):
@@ -1290,9 +1344,10 @@ class Untappd(BaseCog):
 
     @commands.command()
     @commands.guild_only()
-    async def undrank(self, ctx, checkin_id: int):
+    async def undrank(self, ctx, checkin_id: int = 0):
         """Removes a checkin from the spreadsheet. Use ddp to add it back"""
 
+        author = ctx.author
         url = ""
         if ctx.guild:
             guild = str(ctx.guild.id)
@@ -1300,14 +1355,72 @@ class Untappd(BaseCog):
                 url = await self.config.get_raw(guild, "project_url")
             except KeyError:
                 pass
+            try:
+                profile = await self.config.get_raw(guild, author.id, "nick")
+            except KeyError:
+                profile = author.display_name
         else:
             await ctx.send("This does not work in PM")
+
+        try:
+            auth_token = await self.config.get_raw(author.id, "token")
+        except KeyError:
+            auth_token = None
 
         # TODO migrate this to with ctx.channel.typing():
         await ctx.channel.trigger_typing()
         if not url:
             await ctx.send("Looks like there are no projects right now")
             return
+
+        if not checkin_id or checkin_id <= 0:
+            checkin_url = ("https://api.untappd.com/v4/user/checkins/{!s}".format(profile))
+            keys = dict()
+            keys["client_id"] = await self.config.client_id()
+            if auth_token:
+                keys["access_token"] = auth_token
+                # print("Doing an authorized lookup")
+            else:
+                keys["client_secret"] = await self.config.client_secret()
+            keys["limit"] = 1
+            qstr = urllib.parse.urlencode(keys)
+            checkin_url += "?{!s}".format(qstr)
+            j = await get_data_from_untappd(ctx.author, checkin_url)
+            if j["meta"]["code"] != 200:
+                # print("Lookup failed for url: "+url)
+                await ctx.send("Lookup failed with {!s} - {!s}".format(
+                    j["meta"]["code"],
+                    j["meta"]["error_detail"]
+                ))
+                return
+
+            if isinstance(j["response"]["checkins"]["items"], list):
+                checkin_id = j["response"]["checkins"]["items"][0]["checkin_id"]
+            else:
+                await ctx.send("Things seem to work but I did not get"
+                               "a list of checkins")
+                return
+        else:
+            # The case where a checkin id was provided
+            keys = dict()
+            keys["client_id"] = await self.config.client_id()
+            if auth_token:
+                keys["access_token"] = auth_token
+                # print("Doing an authorized lookup")
+            else:
+                keys["client_secret"] = await self.config.client_secret()
+            qstr = urllib.parse.urlencode(keys)
+            checkin_url = "https://api.untappd.com/v4/checkin/view/{!s}?{!s}".format(checkin_id, qstr)
+
+            j = await get_data_from_untappd(ctx.author, checkin_url)
+            if j["meta"]["code"] != 200:
+                # print("Lookup failed for url: "+url)
+                await ctx.send("Lookup failed with {!s} - {!s}").format(
+                    j["meta"]["code"],
+                    j["meta"]["error_detail"])
+                return
+
+            checkin_id = j["response"]["checkin"]["checkin_id"]
 
         payload = {
             "action": "undrank",
