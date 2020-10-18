@@ -1395,7 +1395,7 @@ class Untappd(BaseCog):
                 return
 
             if isinstance(j["response"]["checkins"]["items"], list):
-                checkin_id = j["response"]["checkins"]["items"][0]
+                checkin_id = j["response"]["checkins"]["items"][0]["checkin_id"]
             else:
                 await ctx.send("Things seem to work but I did not get"
                                "a list of checkins")
@@ -1420,7 +1420,7 @@ class Untappd(BaseCog):
                     j["meta"]["error_detail"])
                 return
 
-            checkin_id = j["response"]["checkin"]
+            checkin_id = j["response"]["checkin"]["checkin_id"]
 
         payload = {
             "action": "undrank",
