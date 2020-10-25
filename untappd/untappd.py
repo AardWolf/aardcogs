@@ -9,6 +9,7 @@ from redbot.core import Config
 import urllib.parse
 import asyncio
 import re
+import untappd
 
 # noinspection PyUnresolvedReferences
 
@@ -563,7 +564,7 @@ class Untappd(BaseCog):
         """Search Untappd.com for a beer. Provide a number and it'll
         look up that beer"""
         beer_list = []
-        response = ""
+        response = "Not found"
         list_limit = await list_size(self.config, ctx.guild)
 
         credentials = await check_credentials(self.config)
@@ -572,6 +573,12 @@ class Untappd(BaseCog):
                            "and should use the `untappd_apikey` command")
             return
 
+        ut_client = untappd.Untappd(client_id=credentials.client_id, client_secret=credentials.secret, user_agent='UT-Bot')
+        try:
+            auth_token = await self.config.get_raw(ctx.author.id, "token")
+            ut_client.set_access_token(auth_token)
+        except KeyError:
+            pass
         if keywords:
             keywords = "+".join(keywords)
         else:
@@ -579,9 +586,9 @@ class Untappd(BaseCog):
             return
 
         # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
         if keywords.isdigit():
-            embed = await lookup_beer(self.config, ctx, self.channels, keywords)
+            beer = await ut_client.beer.info(keywords)
+            response = "I found {}".format(beer.beer_name)
             # await ctx.send( embed=embed)
         else:
             results = await search_beer_to_embed(self.config, ctx, self.channels, keywords,
