@@ -1,1 +1,0 @@
-git+git://github.com/AardWolf/untappd-python@master
