@@ -2,4 +2,6 @@ from .untappdcog import Untappdcog
 
 
 def setup(bot):
-    bot.add_cog(Untappdcog(bot))
+    cog = Untappdcog()
+    bot.add_cog(cog(bot))
+    cog.create_init_task()
