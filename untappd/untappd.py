@@ -567,13 +567,13 @@ class Untappd(BaseCog):
         response = "Not found"
         list_limit = await list_size(self.config, ctx.guild)
 
-        credentials = await check_credentials(self.config)
+        (client_id, secret) = await check_credentials(self.config)
         if not credentials:
             await ctx.send("The owner has not set the API information "
                            "and should use the `untappd_apikey` command")
             return
 
-        ut_client = untappd.Untappd(client_id=credentials.client_id, client_secret=credentials.secret, user_agent='UT-Bot')
+        ut_client = untappd.Untappd(client_id=client_id, client_secret=secret, user_agent='UT-Bot')
         try:
             auth_token = await self.config.get_raw(ctx.author.id, "token")
             ut_client.set_access_token(auth_token)
