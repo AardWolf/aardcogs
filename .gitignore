@@ -5,6 +5,8 @@ traderep/*.db
 __pycache__/
 *.py[cod]
 *$py.class
+samples
+samples/*
 
 # C extensions
 *.so

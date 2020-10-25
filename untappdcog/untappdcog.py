@@ -10,6 +10,8 @@ import urllib.parse
 import asyncio
 import re
 import untappd
+import json
+from dotmap import DotMap
 
 # noinspection PyUnresolvedReferences
 
@@ -563,9 +565,7 @@ class Untappdcog(BaseCog):
     async def findbeer(self, ctx, *keywords):
         """Search Untappd.com for a beer. Provide a number and it'll
         look up that beer"""
-        beer_list = []
         response = "Not found"
-        list_limit = await list_size(self.config, ctx.guild)
 
         client_id = await self.config.client_id()
         secret = await self.config.client_secret()
@@ -588,31 +588,14 @@ class Untappdcog(BaseCog):
 
         # TODO migrate this to with ctx.channel.typing():
         if keywords.isdigit():
-            beer = await ut_client.beer.info(keywords)
-            response = "I found {}".format(beer.beer_name)
+            beer = DotMap(ut_client.beer.info(keywords))
+            # print(json.dumps(beer))
+            response = "I found {}".format(beer.response.beer.beer_name)
             # await ctx.send( embed=embed)
         else:
-            results = await search_beer_to_embed(self.config, ctx, self.channels, keywords,
-                                                 limit=list_limit)
-            if isinstance(results, dict):
-                embed = results["embed"]
-                if "beer_list" in results:
-                    beer_list = results["beer_list"]
-            else:
-                embed = results
-            # await ctx.send(result_text, embed=embed)
+            response = "I can't do that yet"
 
-        if isinstance(embed, str):
-            message = await ctx.send(embed)
-        elif embed:
-            message = await ctx.send(response, embed=embed)
-        else:
-            message = await ctx.send(response)
-
-        if len(beer_list) > 1:
-            await embed_menu(self.bot, self.config, ctx, self.channels, beer_list,
-                             message, 60)
-            # Raised to 60 second wait
+        message = await ctx.send(response)
 
     @commands.command()
     async def homebrew(self, ctx, *keywords):
