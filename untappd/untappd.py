@@ -24,7 +24,7 @@ import untappd
 BaseCog = getattr(commands, "Cog", object)
 
 
-class Untappd(BaseCog):
+class UntappdCog(BaseCog):
     """Untappd cog that lets the bot look up beer
     information from untappd.com!"""
 
@@ -567,8 +567,9 @@ class Untappd(BaseCog):
         response = "Not found"
         list_limit = await list_size(self.config, ctx.guild)
 
-        (client_id, secret) = await check_credentials(self.config)
-        if not credentials:
+        client_id = await self.config.client_id()
+        secret = await self.config.client_secret()
+        if (not client_id or not secret):
             await ctx.send("The owner has not set the API information "
                            "and should use the `untappd_apikey` command")
             return
@@ -1561,7 +1562,7 @@ async def check_credentials(config):
 
 
 def setup(bot):
-    bot.add_cog(Untappd(bot))
+    bot.add_cog(UntappdCog(bot))
 
 
 async def get_auth(author_id, config):
