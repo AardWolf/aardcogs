@@ -11,6 +11,11 @@ import json
 import asyncio
 from dotmap import DotMap
 
+# These will go away
+import urllib
+import requests
+import aiohttp
+
 # noinspection PyUnresolvedReferences
 
 # Beer: https://untappd.com/beer/<bid>
@@ -29,25 +34,7 @@ class Untappdcog(BaseCog):
     information from untappd.com!"""
 
     def __init__(self, bot):
-        self._ready = asyncio.Event()
-        self._init_task = None
-        self._ready_raised = False
-    
-    def create_init_task(self):
-        def _done_callback(task):
-            exc = task.exception()
-            if exc is not None:
-                log.error(
-                    "An unexpected error occurred during CogName's initialization.", exc_info=exc
-                )
-                self._ready_raised = True
-            self._ready.set()
-        
-        self._init_task = asyncio.create_task(self.initialize())
-        self._init_task.add_done_callback(_done_callback)
-    
-    async def initialize(self):
-        await self.bot.wait_until_read()
+        self.bot = bot
         self.config = Config.get_conf(self, identifier=19006438562, force_registration=True)  # Arbitrary but unique ID
         default_config = {
             "max_items_in_list": 5,
@@ -62,24 +49,6 @@ class Untappdcog(BaseCog):
         self.config.register_global(**default_config)
         self.channels = {}
         self.is_chatty = False  # Lets some debugging / annoying PMs happen
-        print(self.config)
-        self.ut_client = await login_untappd(self.config)
-        if self.ut_client:
-            print("API set")
-
-    def cog_unload(self):
-        if self._init_task is not None:
-            self._init_task.cancel()
-
-    async def cog_before_invoke(self, ctx):
-        # use if commands need initialize() to finish
-        async with ctx.typing():
-            await self._ready.wait()
-        if self._ready_raised:
-            await ctx.send(
-                "There was an error during UntappdCogs's initialization. Check logs for more information."
-            )
-            raise commands.CheckFailure()
 
     @commands.group(invoke_without_command=False)
     async def groupdrink(self, ctx):
@@ -621,10 +590,11 @@ class Untappdcog(BaseCog):
 
         # TODO migrate this to with ctx.channel.typing():
         if keywords.isdigit():
-            beer = DotMap(ut_client.beer.info(keywords))
+            lookup = DotMap(ut_client.beer.info(keywords))
             # print(json.dumps(beer))
-            if beer:
-                await ctx.send("I found your beer:", embed=beer_to_embed(beer))
+            if lookup:
+                # print(lookup.response.beer)
+                await ctx.send("I found your beer:", embed=beer_to_embed(lookup.response.beer))
             else:
                 await ctx.send("Not found")
             # await ctx.send( embed=embed)
@@ -799,14 +769,7 @@ class Untappdcog(BaseCog):
             await self.config.client_id.set(keywords[0])
             await self.config.client_secret.set(keywords[1])
             await self.config.CONFIG.set(True)
-            self.ut_client = untappd.Untappd(client_id=keywords[0], client_secret=keywords[1], user_agent='UT-Bot')
-            try:
-                self.ut_client.beer.info('1') # Can only tell if it's connected by using it
-            except untappd.UntappdException:
-                await ctx.send("Could not connect to untappd with that client_id/secret")
-                del self.ut_client
-            if self.ut_client:
-                await ctx.send("API set")
+            await ctx.send("API set")
         else:
             await ctx.send("I am expecting two words, the id and "
                            "the secret only")
@@ -1638,13 +1601,12 @@ def beer_to_embed(beer, rating=None):
     """Takes a beer json response object and returns an embed"""
 
     beer = DotMap(beer)
-    if hasattr(beer, 'bid'):
+    if not 'bid' in beer:
         return embedme("No bid, didn't look like a beer")
-    beerid = beer.bid
     beer_url = "https://untappd.com/b/{slug}/{bid!s}".format(slug=beer.beer_slug, bid=beer.bid)
     brewery_url = "https://untappd.com/brewery/{brewery_id!s}".format(brewery_id=beer.brewery.brewery_id)
     beer_title = beer.beer_name
-    if hasattr(beer, 'created_at'):
+    if 'created_at' in beer:
         beer_ts = datetime.strptime(beer["created_at"], "%a, %d %b %Y %H:%M:%S %z")
     else:
         beer_ts = datetime.now(timezone.utc)
@@ -1657,13 +1619,13 @@ def beer_to_embed(beer, rating=None):
                      icon_url=beer.brewery.brewery_label)
     embed.add_field(name="Brewery Home", value=brewery_location(beer.brewery), inline=True)
     embed.add_field(name="Style", value=beer.beer_style, inline=True)
-    if hasattr(beer, rating_score) and hasattr(beer, rating_count):
+    if "rating_score" in beer and "rating_count" in beer:
         rating_str = "{score!s} Caps ({ratings})".format(score=round(beer.rating_score, 2),
             ratings=human_number(beer.rating_count))
     else:
         rating_str = "Unknown"
     rating_title = "Rating"
-    if hasattr(beer, "auth_rating") and beer.auth_rating:
+    if "auth_rating" in beer and beer.auth_rating:
         rating_title += " ({!s})".format(beer.auth_rating)
     embed.add_field(name=rating_title, value=rating_str, inline=True)
     embed.add_field(name="ABV", value=beer.beer_abv, inline=True)
@@ -1671,40 +1633,40 @@ def beer_to_embed(beer, rating=None):
     if rating:
         embed.add_field(name="Checkin Rating", value=str(rating), inline=True)
     embed.set_thumbnail(url=beer.beer_label)
-    if hasattr(beer, "stats"):
+    if "stats" in beer:
         stats_str = "{count!s} checkins from {user_count!s} users".format(
             count=human_number(beer.stats.total_count),
             user_count=human_number(beer.stats.total_user_count)
         )
-        if hasattr(beer.stats,"monthly_count"):
+        if "monthly_count" in beer.stats:
             stats_str += " ({!s} this month)".format(human_number(beer.stats.monthly_count))
         stats_title = "Stats"
-        if hasattr(beer.stats, "user_count"):
+        if "user_count" in beer.stats:
             stats_title += " (You: {!s})".format(human_number(beer.stats.user_count))
         embed.add_field(name=stats_title, value=stats_str, inline=True)
     last_seen = "Never"
-    if hasattr(beer, "checkins"):
+    if "checkins" in beer:
         if beer.checkins.count:
-            last_seen = time_ago(beer.checkins.items[0].created_at, long=True)
+            last_seen = time_ago(beer.checkins['items'][0].created_at, long=True)
         embed.add_field(name="Last Seen", value=last_seen, inline=True)
 
-    footer_str = "Beer {!s} ".format(beerid)
+    footer_str = "Beer {!s} ".format(beer.bid)
     prod_str = ""
     if not beer.is_in_production:
         prod_str = "Not in production"
     footer_str = footer_str + prod_str
     embed.set_footer(text=footer_str)
 
-    if hasattr(beer, "collaborations_with"):
+    if "collaborations_with" in beer:
         collab_str = ""
-        collabs = beer.collaborations_with.items
+        collabs = beer.collaborations_with['items']
         for num, collab in zip(range(10), collabs): # pylint: disable=unused-variable
             collab_str += " [{name!s}](https://untappd.com/brewery/{brewery_id!s})\n".format(
                 name=collab.brewery.brewery_name, brewery_id=collab.brewery.brewery_id
             )
         if len(collabs) > 10:
             collab_str += "... and more"
-        embed.add_field(name="Collaboration with", value=collab_str[:2048])
+        embed.add_field(name="Collaboration with", value=collab_str[:2048] or "no collabs")
     return embed
 
 
