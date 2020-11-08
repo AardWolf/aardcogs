@@ -569,37 +569,20 @@ class Untappdcog(BaseCog):
         """Search Untappd.com for a beer. Provide a number and it'll
         look up that beer"""
 
-        client_id = await self.config.client_id()
-        secret = await self.config.client_secret()
-        if (not client_id or not secret):
-            await ctx.send("The owner has not set the API information "
-                           "and should use the `untappd_apikey` command")
-            return
-
-        ut_client = untappd.Untappd(client_id=client_id, client_secret=secret, user_agent='UT-Bot')
-        try:
-            auth_token = await self.config.get_raw(ctx.author.id, "token")
-            ut_client.set_access_token(auth_token)
-        except KeyError:
-            pass
-        if keywords:
-            keywords = "+".join(keywords)
+        lookup_info = DotMap(determine_beer_search(keywords))
+        async with ctx.typing():
+            if not lookup_info:
+                await ctx.send("I didn't understand that search")
+                return
+            elif lookup_info.search_type == 'lookup':
+                beer = await get_beer_by_id(self.config, ctx, lookup_info.search_str)
+            elif lookup_info.search_type == 'search':
+                beer = "Coming soon!"
+            
+        if beer and isinstance(beer, dict):
+            await ctx.send(embed=beer_to_embed(beer))
         else:
-            await ctx.send_help()
-            return
-
-        # TODO migrate this to with ctx.channel.typing():
-        if keywords.isdigit():
-            lookup = DotMap(ut_client.beer.info(keywords))
-            # print(json.dumps(beer))
-            if lookup:
-                # print(lookup.response.beer)
-                await ctx.send("I found your beer:", embed=beer_to_embed(lookup.response.beer))
-            else:
-                await ctx.send("Not found")
-            # await ctx.send( embed=embed)
-        else:
-            await ctx.send("I can't do that yet")
+            await ctx.send(beer or "Sorry, something went wrong")
 
     @commands.command()
     async def homebrew(self, ctx, *keywords):
@@ -1566,19 +1549,26 @@ async def get_auth(author_id, config):
 async def get_beer_by_id(config, ctx, beerid):
     """Use the untappd API to return a beer dict for a beer id"""
 
-    keys = await get_auth(ctx.author.id, config)
-    qstr = urllib.parse.urlencode(keys)
-    url = "https://api.untappd.com/v4/beer/info/{!s}?{!s}".format(
-        beerid, qstr
-    )
-    resp = await get_data_from_untappd(ctx.author, url)
-    if resp['meta']['code'] == 200:
-        return resp['response']['beer']
+    client_id = await config.client_id()
+    secret = await config.client_secret()
+    if (not client_id or not secret):
+        await ctx.send("The owner has not set the API information "
+                        "and should use the `untappd_apikey` command")
+        return
+
+    ut_client = untappd.Untappd(client_id=client_id, client_secret=secret, user_agent='UT-Bot')
+    try:
+        auth_token = await config.get_raw(ctx.author.id, "token")
+        ut_client.set_access_token(auth_token)
+    except KeyError:
+        pass
+
+    lookup = DotMap(ut_client.beer.info(beerid))
+    # print(json.dumps(beer))
+    if lookup:
+        return lookup.response.beer
     else:
-        return "Query failed with code {!s}: {!s}".format(
-            resp['meta']['code'],
-            resp['meta']['error_detail']
-        )
+        return "Beer lookup failed with code {!s}: {!s}".format(lookup.meta.code, lookup.meta.error_detail)
 
 
 async def lookup_beer(config, ctx, channels, beerid: int):
@@ -1826,6 +1816,28 @@ async def search_beer_to_embed(config, ctx, channels, query, limit=None, homebre
         result["beer_list"] = beer_list
     return result
 
+
+def determine_beer_search(keywords):
+    """Based on the keywords passed in determine what we're looking for
+    
+    :param keywords: (tuple)
+        The keywords to analyze: a URL, a beer ID, or a search string split on spaces
+    :returns: (dict of str: str)
+
+    Returns an object:
+        search_type: 'lookup' (probably want a specific beer) or 'search' (probably a search string)
+        search_str:  The thing to look up - it will be a stringy number or a string as appropriate"""
+    if not keywords:
+        return
+    search_str = "+".join(keywords)
+    if search_str.isdigit():
+        return { 'search_type': 'lookup', 'search_str': search_str }
+    elif "untappd.com/b/" in search_str:
+        bid = re.search(r"\d+", search_str)
+        return { 'search_type': 'lookup', 'search_str': bid.group() }
+    else:
+        return { 'search_type': 'search', 'search_str': search_str }
+    
 
 async def profile_lookup(config, ctx, profile, limit=5):
     """Looks up a profile in untappd by username"""
