@@ -471,6 +471,7 @@ class Untappd(BaseCog):
         Requires that you've authenticated the bot to act as you"""
 
         response = ""  # type: str
+        embed = None
         credentials = await check_credentials(self.config)
         if not credentials:
             await ctx.send("The owner has not set the API information "
@@ -490,73 +491,78 @@ class Untappd(BaseCog):
             return
 
         set_beer_id = False
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
-        if keywords.isdigit():
-            beerid = keywords
-        else:
-            beers = await search_beer(self.config, ctx, keywords, limit=1)
-            if isinstance(beers, str):
-                await ctx.send(
-                    "Lookup of `{!s}` didn't result in a beer list: {!s}".
-                        format(keywords, beers)
-                )
-                return
-            elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
-                beerid = beers["items"][0]["beer"]["bid"]
-                set_beer_id = True
+        async with ctx.channel.typing():
+            if keywords.isdigit():
+                beerid = keywords
             else:
-                await ctx.send(("Lookup of `{!s}` failed. So no, "
-                                "you haven't"
-                                ).format(keywords))
+                beers = await search_beer(self.config, ctx, keywords, limit=1)
+                if isinstance(beers, str):
+                    await ctx.send(
+                        "Lookup of `{!s}` didn't result in a beer list: {!s}".
+                            format(keywords, beers)
+                    )
+                    return
+                elif isinstance(beers["items"], list) and len(beers["items"]) > 0:
+                    beerid = beers["items"][0]["beer"]["bid"]
+                    set_beer_id = True
+                else:
+                    await ctx.send(("Lookup of `{!s}` failed. So no, "
+                                    "you haven't"
+                                    ).format(keywords))
+                    return
+
+            if beerid:
+                beer = await get_beer_by_id(self.config, ctx, beerid)
+                if isinstance(beer, str):
+                    await ctx.send(beer)
+                    return
+                description = ""
+                if beer["stats"]["user_count"]:
+                    description = "You have had '**{!s}**' by **{!s}** {!s} time{!s}".format(
+                        beer["beer_name"],
+                        beer["brewery"]["brewery_name"],
+                        beer["stats"]["user_count"],
+                        add_s(beer["stats"]["user_count"])
+                    )
+                    if beer["auth_rating"]:
+                        description += " and you gave it {!s} cap{!s}.".format(
+                            beer["auth_rating"],
+                            add_s(beer["auth_rating"])
+                        )
+                    if set_beer_id:
+                        description += " `{!s}findbeer {!s}` or click above to see more details.".format(
+                            ctx.prefix,
+                            beerid
+                        )
+                else:
+                    description = "You have never had '**{!s}**' by **{!s}**".format(
+                        beer["beer_name"],
+                        beer["brewery"]["brewery_name"]
+                    )
+                    if beer["stats"]["total_user_count"]:
+                        description += " but {!s} other people have.".format(
+                            human_number(beer["stats"]["total_user_count"])
+                        )
+                    if set_beer_id:
+                        description += " `{!s}findbeer {!s}` or click above to see more details.".format(
+                            ctx.prefix,
+                            beerid
+                        )
+                if description:
+                    embed = discord.Embed(title="{!s}".format(beer["beer_name"]),
+                        description=description,
+                        url="https://www.untappd.com/beer/{!s}".format(beerid))
+                    embed.set_thumbnail(url=beer['beer_label'])
+            else:
+                await ctx.send_help()
                 return
 
-        if beerid:
-            beer = await get_beer_by_id(self.config, ctx, beerid)
-            if isinstance(beer, str):
-                await ctx.send(beer)
-                return
-            if beer["stats"]["user_count"]:
-                response += ("You have had '**{!s}**' by **{!s}** {!s} "
-                             "time{!s}").format(
-                    beer["beer_name"],
-                    beer["brewery"]["brewery_name"],
-                    beer["stats"]["user_count"],
-                    add_s(beer["stats"]["user_count"])
-                )
-                if beer["auth_rating"]:
-                    response += " and you gave it {!s} cap{!s}.".format(
-                        beer["auth_rating"],
-                        add_s(beer["auth_rating"])
-                    )
-                if set_beer_id:
-                    response += " `{!s}findbeer {!s}` to see details.".format(
-                        ctx.prefix,
-                        beerid
-                    )
+            if embed:
+                await ctx.send("", embed=embed)
+            elif response:
+                await ctx.send(response)
             else:
-                response += ("You have never had '**{!s}**' by **{!s}**"
-                             ).format(
-                    beer["beer_name"],
-                    beer["brewery"]["brewery_name"]
-                )
-                if beer["stats"]["total_user_count"]:
-                    response += " but {!s} other people have.".format(
-                        human_number(beer["stats"]["total_user_count"])
-                    )
-                if set_beer_id:
-                    response += " `{!s}findbeer {!s}` to see details.".format(
-                        ctx.prefix,
-                        beerid
-                    )
-        else:
-            await ctx.send_help()
-            return
-
-        if response:
-            await ctx.send(response)
-        else:
-            await ctx.send("You may not have provided a beer ID")
+                await ctx.send("You may not have provided a beer ID")
 
     @commands.command()
     async def findbeer(self, ctx, *keywords):
