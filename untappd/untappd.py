@@ -586,11 +586,12 @@ class Untappd(BaseCog):
 
         # TODO migrate this to with ctx.channel.typing():
         await ctx.channel.trigger_typing()
-        if keywords.isdigit():
-            embed = await lookup_beer(self.config, ctx, self.channels, keywords)
+        search = parse_keywords(keywords, "beer")
+        if 'BID' in search and search['BID']:
+            embed = await lookup_beer(self.config, ctx, self.channels, search['BID'])
             # await ctx.send( embed=embed)
         else:
-            results = await search_beer_to_embed(self.config, ctx, self.channels, keywords,
+            results = await search_beer_to_embed(self.config, ctx, self.channels, search['search_string'],
                                                  limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
@@ -1520,6 +1521,13 @@ class Untappd(BaseCog):
                             await ctx.send("Something went un-finding the beer")
 
 
+keyword_id_types = {
+    "beer": "BID",
+    "checkin": "checkin_id",
+    "user": "user_name",
+    "brewery": "brewery_id"
+}
+
 async def do_toast(config, author, checkin: int):
     """Toast a specific checkin"""
 
@@ -1981,6 +1989,35 @@ EMOJI = {
     "left": "⬅"
 }
 
+
+def parse_keywords(keywords, hint):
+    """returns a dict with relevant types of values populated"""
+    values = {}
+    print("Checking {} with hint {}".format(keywords, hint))
+    if keywords.isdigit():
+        if hint in keyword_id_types:
+            values[keyword_id_types[hint]] = keywords
+    if re.match(r'.*untappd\.com/', keywords, re.I):
+        # We have a URL of some sort
+        p = re.compile(r'^.*untappd.com/((?P<b>b)/.*?|(?P<beer>beer)|(?P<brewery>brewery)|(?P<checkin>user)/(?P<user>.*)?/checkin)/(?P<id>\d+)', re.I)
+        matches = p.match(keywords)
+        print('got a URL, {}'.format(matches))
+        if matches:
+            groups = matches.groupdict()
+            if groups['b']:
+                values['BID'] = groups['id']
+            elif groups['beer']:
+                values['BID'] = groups['id']
+            elif groups['checkin']:
+                values['checkin_id'] = groups['id']
+                values['user_name'] = groups['user']
+            elif groups['brewery']:
+                values['brewery_id'] = groups['id']
+    else:
+        # It is a search string
+        print ("Just a search string: {}".format(keywords))
+        values['search_string'] = keywords
+    return values
 
 async def embed_menu(client, config, ctx, channels, beer_list: list, message, timeout: int = 30,
                      type_: str = "beer", paging: bool = False, reacted: bool = False):
