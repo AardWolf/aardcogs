@@ -315,22 +315,24 @@ class Untappd(BaseCog):
                 if self.channels[channel]:
                     if "beer" in self.channels[channel]:
                         beerid = self.channels[channel]["beer"]
+                        search["BID"] = beerid
                         default_beer = True
             if not beerid:
                 await ctx.send_help()
                 return
 
         # TODO migrate this to with ctx.channel.typing():
+        search = parse_keywords(keywords, "beer")
         await ctx.channel.trigger_typing()
-        if not beerid and keywords.isdigit():
-            beer = await get_beer_by_id(self.config, ctx, keywords)
+        if not beerid and 'BID' in search and search['BID']:
+            beer = await get_beer_by_id(self.config, ctx, search['BID'])
             if isinstance(beer, str):
                 await ctx.send("Wishlist add failed - {!s}".
                                format(beer))
                 return
             beerid = keywords
         elif not beerid:
-            beers = await search_beer(self.config, ctx, keywords, limit=1)
+            beers = await search_beer(self.config, ctx, search['search_string'], limit=1)
             if isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
@@ -405,6 +407,7 @@ class Untappd(BaseCog):
                 if self.channels[channel]:
                     if "beer" in self.channels[channel]:
                         beerid = self.channels[channel]["beer"]
+                        search['BID'] = beerid
                         default_beer = True
             if not beerid:
                 await ctx.send_help()
@@ -412,15 +415,16 @@ class Untappd(BaseCog):
 
         # TODO migrate this to with ctx.channel.typing():
         await ctx.channel.trigger_typing()
-        if not beerid and keywords.isdigit():
-            beer = await get_beer_by_id(self.config, ctx, keywords)
+        search = parse_keywords(keywords, "beer")
+        if not beerid and 'BID' in search and search['BID']:
+            beer = await get_beer_by_id(self.config, ctx, search['BID'])
             if isinstance(beer, str):
                 await ctx.send("Wishlist remove failed - {!s}".
                                format(beer))
                 return
             beerid = keywords
         elif not beerid:
-            beers = await search_beer(self.config, ctx, keywords, limit=1)
+            beers = await search_beer(self.config, ctx, search['search_string'], limit=1)
             if isinstance(beers["items"], list) and len(beers["items"]) > 0:
                 beerid = beers["items"][0]["beer"]["bid"]
             else:
@@ -491,11 +495,12 @@ class Untappd(BaseCog):
             return
 
         set_beer_id = False
+        search = parse_keywords(keywords, "beer")
         async with ctx.channel.typing():
-            if keywords.isdigit():
-                beerid = keywords
+            if 'BID' in search and search['BID']:
+                beerid = search['BID']
             else:
-                beers = await search_beer(self.config, ctx, keywords, limit=1)
+                beers = await search_beer(self.config, ctx, search['search_string'] or keywords, limit=1)
                 if isinstance(beers, str):
                     await ctx.send(
                         "Lookup of `{!s}` didn't result in a beer list: {!s}".
@@ -591,7 +596,7 @@ class Untappd(BaseCog):
             embed = await lookup_beer(self.config, ctx, self.channels, search['BID'])
             # await ctx.send( embed=embed)
         else:
-            results = await search_beer_to_embed(self.config, ctx, self.channels, search['search_string'],
+            results = await search_beer_to_embed(self.config, ctx, self.channels, search['search_string'] or '',
                                                  limit=list_limit)
             if isinstance(results, dict):
                 embed = results["embed"]
@@ -634,12 +639,13 @@ class Untappd(BaseCog):
             return
 
         # TODO migrate this to with ctx.channel.typing():
+        search = parse_keywords(keywords, "beer")
         await ctx.channel.trigger_typing()
-        if keywords.isdigit():
-            embed = await lookup_beer(self.config, ctx, self.channels, keywords)
+        if 'BID' in search and search['BID']:
+            embed = await lookup_beer(self.config, ctx, self.channels, search['BID'])
             # await ctx.send( embed=embed)
         else:
-            results = await search_beer_to_embed(self.config, ctx, self.channels, keywords,
+            results = await search_beer_to_embed(self.config, ctx, self.channels, search['search_string'],
                                                  limit=list_limit, homebrew=True)
             if isinstance(results, dict):
                 embed = results["embed"]
@@ -817,9 +823,13 @@ class Untappd(BaseCog):
 
         checkin = 0
 
-        for word in keywords:
-            if word.isdigit():
-                checkin = int(word)
+        search = parse_keywords(" ".join(keywords), "checkin")
+        if 'checkin_id' in search and search['checkin_id']:
+            checkin = search['checkin_id']
+        else:
+            for word in keywords:
+                if word.isdigit():
+                    checkin = int(word)
 
         if not checkin:
             channel = ctx.channel.id
@@ -860,9 +870,13 @@ class Untappd(BaseCog):
         except KeyError:
             auth_token = None
 
-        for word in keywords:
-            if word.isdigit():
-                checkin = int(word)
+        search = parse_keywords(" ".join(keywords), "checkin")
+        if 'checkin_id' in search and search['checkin_id']:
+            checkin = search['checkin_id']
+        else:
+            for word in keywords:
+                if word.isdigit():
+                    checkin = int(word)
 
         if not checkin:
             await ctx.send("A checkin ID number is required")
@@ -912,13 +926,19 @@ class Untappd(BaseCog):
                     profile = user.display_name
 
         # The way the API works you can provide a checkin number and limit
-        for word in keywords:
-            # print("Checking " + word)
-            if word.isdigit():
-                startnum = int(word)
-                countnum = 1
-            elif not profile:
-                profile = word
+        #TODO: Modify this to use a profile link later
+        search = parse_keywords(keywords, "checkin")
+        if 'checkin_id' in search and search['checkin_id']:
+            startnum = search['checkin_id']
+            profile = search['user_name']
+        else:
+            for word in keywords:
+                # print("Checking " + word)
+                if word.isdigit():
+                    startnum = int(word)
+                    countnum = 1
+                elif not profile:
+                    profile = word
         if not profile:
             try:
                 profile = await self.config.get_raw(guild, author.id, "nick")
@@ -984,10 +1004,11 @@ class Untappd(BaseCog):
 
         # TODO migrate this to with ctx.channel.typing():
         await ctx.channel.trigger_typing()
-        if keywords.isdigit():
-            beerid = keywords
+        search = parse_keywords(keywords, "beer")
+        if 'BID' in search and search['BID']:
+            beerid = search['BID']
         else:
-            beers = await search_beer(self.config, ctx, keywords, limit=1)
+            beers = await search_beer(self.config, ctx, search['search_string'] or '', limit=1)
             if isinstance(beers, str):
                 await ctx.send(
                     "Lookup of `{!s}` didn't result in a beer list: {!s}".format(keywords, beers)
@@ -1991,17 +2012,16 @@ EMOJI = {
 
 
 def parse_keywords(keywords, hint):
-    """returns a dict with relevant types of values populated"""
+    """returns a dict with relevant types of values populated. It will always have 'search_string' defined."""
     values = {}
-    print("Checking {} with hint {}".format(keywords, hint))
+    values['search_string'] = keywords
     if keywords.isdigit():
         if hint in keyword_id_types:
             values[keyword_id_types[hint]] = keywords
     if re.match(r'.*untappd\.com/', keywords, re.I):
-        # We have a URL of some sort
+        # We have a URL of some sort. This does not match a user profile: https://untappd.com/user/Aardwolf98
         p = re.compile(r'^.*untappd.com/((?P<b>b)/.*?|(?P<beer>beer)|(?P<brewery>brewery)|(?P<checkin>user)/(?P<user>.*)?/checkin)/(?P<id>\d+)', re.I)
         matches = p.match(keywords)
-        print('got a URL, {}'.format(matches))
         if matches:
             groups = matches.groupdict()
             if groups['b']:
@@ -2013,10 +2033,6 @@ def parse_keywords(keywords, hint):
                 values['user_name'] = groups['user']
             elif groups['brewery']:
                 values['brewery_id'] = groups['id']
-    else:
-        # It is a search string
-        print ("Just a search string: {}".format(keywords))
-        values['search_string'] = keywords
     return values
 
 async def embed_menu(client, config, ctx, channels, beer_list: list, message, timeout: int = 30,
