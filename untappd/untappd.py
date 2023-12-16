@@ -2011,7 +2011,7 @@ EMOJI = {
 }
 
 
-def parse_keywords(keywords, hint):
+def parse_keywords(keywords: str, hint: str):
     """returns a dict with relevant types of values populated. It will always have 'search_string' defined."""
     values = {}
     values['search_string'] = keywords
