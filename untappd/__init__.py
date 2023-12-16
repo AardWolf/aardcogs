@@ -1,5 +1,5 @@
 from .untappd import Untappd
 
 
-def setup(bot):
-    bot.add_cog(Untappd(bot))
+async def setup(bot):
+    await bot.add_cog(Untappd(bot))

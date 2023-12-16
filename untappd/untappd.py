@@ -212,8 +212,7 @@ class Untappd(BaseCog):
             await ctx.send("Friend who? Give me a name!")
             return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         qstr = urllib.parse.urlencode(keys)
         # This will be needed several times
         # First get the UID for the profile
@@ -320,8 +319,7 @@ class Untappd(BaseCog):
                 await ctx.send_help()
                 return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if not beerid and keywords.isdigit():
             beer = await get_beer_by_id(self.config, ctx, keywords)
             if isinstance(beer, str):
@@ -410,8 +408,7 @@ class Untappd(BaseCog):
                 await ctx.send_help()
                 return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if not beerid and keywords.isdigit():
             beer = await get_beer_by_id(self.config, ctx, keywords)
             if isinstance(beer, str):
@@ -584,8 +581,7 @@ class Untappd(BaseCog):
             await ctx.send_help()
             return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if keywords.isdigit():
             embed = await lookup_beer(self.config, ctx, self.channels, keywords)
             # await ctx.send( embed=embed)
@@ -632,8 +628,7 @@ class Untappd(BaseCog):
             await ctx.send_help()
             return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if keywords.isdigit():
             embed = await lookup_beer(self.config, ctx, self.channels, keywords)
             # await ctx.send( embed=embed)
@@ -663,8 +658,7 @@ class Untappd(BaseCog):
     @commands.command()
     async def findbeer1(self, ctx, *keywords):
         result_text = ""
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         results = await search_beer_to_embed(self.config, ctx, self.channels,
                                              " ".join(keywords), limit=1)
         if isinstance(results, dict):
@@ -707,8 +701,7 @@ class Untappd(BaseCog):
             except KeyError:
                 profile = author.display_name
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         results = await get_checkins(self.config, ctx, self.channels, profile=profile, count=1)
         if (isinstance(results, dict)) and ("embed" in results):
             embed = results["embed"]
@@ -751,8 +744,7 @@ class Untappd(BaseCog):
         if not profile:
             profile = author.display_name
             print("Using '{}'".format(profile))
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         results = await profile_lookup(self.config, ctx, profile,
                                        limit=await list_size(self.config, ctx.guild))
         if isinstance(results, dict):
@@ -867,8 +859,7 @@ class Untappd(BaseCog):
             await ctx.send("A checkin ID number is required")
             return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         embed = await get_checkin(self.config, ctx, self.channels,
                                   checkin=checkin, auth_token=auth_token)
         if isinstance(embed, str):
@@ -936,8 +927,7 @@ class Untappd(BaseCog):
         # if ctx.command.name == "lastbeer":
         #     countnum = 1
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         results = await get_checkins(self.config, ctx, self.channels, profile=profile,
                                      start=startnum, count=countnum)
         if isinstance(results, dict):
@@ -981,8 +971,7 @@ class Untappd(BaseCog):
             await ctx.send_help()
             return
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if keywords.isdigit():
             beerid = keywords
         else:
@@ -1211,8 +1200,7 @@ class Untappd(BaseCog):
         except KeyError:
             auth_token = None
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if not url:
             await ctx.send("Looks like there are no projects right now")
             return
@@ -1373,8 +1361,7 @@ class Untappd(BaseCog):
         except KeyError:
             auth_token = None
 
-        # TODO migrate this to with ctx.channel.typing():
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if not url:
             await ctx.send("Looks like there are no projects right now")
             return
