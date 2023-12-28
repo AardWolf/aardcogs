@@ -46,7 +46,7 @@ class Traderep(commands.Cog):
     @traderep.command(name="start", pass_context=True, no_pm=True)
     async def trade_start(self, ctx, partner: discord.Member):
         """Starts a trade between the person executing the command and the person mentioned"""
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         if partner.id == ctx.message.author.id:
             await ctx.send("You can't trade with yourself, that's a 0-sum game!")
             return
@@ -85,7 +85,7 @@ class Traderep(commands.Cog):
     @traderep.command(name="cancel", aliases=["stop"], pass_context=True, no_pm=True)
     async def trade_stop(self, ctx, arg):
         """Stops a trade but doesn't break it"""
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         trade_who, trade_num, trade_person = None, None, None
         mentions = ctx.message.mentions
         if arg.isdigit():
@@ -147,19 +147,19 @@ class Traderep(commands.Cog):
     @traderep.command(name="rep", pass_context=True, no_pm=True)
     async def rep(self, ctx, arg):
         """Reps a trading partner for a trade. Closes your end of a trade"""
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         await repmod(self, ctx, arg, 1)
 
     @traderep.command(name="derep", pass_context=True, no_pm=True)
     async def derep(self, ctx, arg):
         """Dings a trading partner for messing up a trade"""
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         await repmod(self, ctx, arg, -1)
 
     @traderep.command(name="report", aliases=["profile", "status"], pass_context=True, no_pm=True)
     async def report(self, ctx, *, args="0"):
         """Generates a report on a user. Accepts names, mentions, and IDs"""
-        await ctx.channel.trigger_typing()
+        await ctx.channel.typing()
         mentions = ctx.message.mentions
         if not args or args == "0":
             # User is reporting on themself
