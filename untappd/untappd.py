@@ -1408,9 +1408,9 @@ class Untappd(BaseCog):
             j = await get_data_from_untappd(ctx.author, checkin_url)
             if j["meta"]["code"] != 200:
                 # print("Lookup failed for url: "+url)
-                await ctx.send("Lookup failed with {!s} - {!s}").format(
+                await ctx.send("Lookup failed with {!s} - {!s}".format(
                     j["meta"]["code"],
-                    j["meta"]["error_detail"])
+                    j["meta"]["error_detail"]))
                 return
 
             checkin_id = j["response"]["checkin"]["checkin_id"]
