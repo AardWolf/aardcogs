@@ -1267,6 +1267,9 @@ class Untappd(BaseCog):
         rating = checkin["rating_score"]
         comment = checkin["checkin_comment"]
         checkin_date = checkin["created_at"]
+        country = "Unknown"
+        if "country_name" in checkin["brewery"]:
+            country = checkin["brewery"]["country_name"]
 
         beer = await get_beer_by_id(self.config, ctx, beer_id)
         avg_rating = beer["rating_score"]
@@ -1295,7 +1298,8 @@ class Untappd(BaseCog):
             "collabs": collabs,
             "abv": abv,
             "comment": comment,
-            "beer_date": beer_date
+            "beer_date": beer_date,
+            "country": country
         }
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, data=payload) as resp:
